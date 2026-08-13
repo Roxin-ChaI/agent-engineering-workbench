@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from agent_engineering_workbench import __version__
+from agent_engineering_workbench.api import research_router
 
 
 class HealthResponse(BaseModel):
@@ -13,6 +14,7 @@ app = FastAPI(
     title="Agent Engineering Workbench API",
     version=__version__,
 )
+app.include_router(research_router)
 
 
 @app.get("/health", response_model=HealthResponse)
