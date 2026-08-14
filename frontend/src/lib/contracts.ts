@@ -30,3 +30,16 @@ export interface RunResult {
 export interface WebResearchRequest {
   query: string;
 }
+
+export type StreamEventType =
+  | "started"
+  | "trace"
+  | "completed"
+  | "stopped"
+  | "error";
+
+export interface StreamEvent {
+  sequence: number;
+  event_type: StreamEventType;
+  data: Record<string, unknown>;
+}
