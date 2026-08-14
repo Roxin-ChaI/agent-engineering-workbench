@@ -1,5 +1,5 @@
 import { ComingSoon } from "@/components/coming-soon";
 
 export default function ContextPage() {
-  return <ComingSoon title="Context" />;
+  return <ComingSoon titleKey="navigation.context" />;
 }

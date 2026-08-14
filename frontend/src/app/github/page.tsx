@@ -1,5 +1,5 @@
 import { ComingSoon } from "@/components/coming-soon";
 
 export default function GitHubPage() {
-  return <ComingSoon title="GitHub" />;
+  return <ComingSoon titleKey="navigation.github" />;
 }

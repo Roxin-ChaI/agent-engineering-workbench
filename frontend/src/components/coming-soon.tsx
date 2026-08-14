@@ -1,13 +1,20 @@
-export function ComingSoon({ title }: { title: string }) {
+"use client";
+
+import { usePreferences } from "@/components/preferences-provider";
+import type { TranslationKey } from "@/lib/i18n";
+
+export function ComingSoon({ titleKey }: { titleKey: TranslationKey }) {
+  const { t } = usePreferences();
+
   return (
     <section className="mx-auto max-w-6xl">
-      <p className="section-label">Workbench / Planned</p>
-      <h1 className="page-title">{title}</h1>
+      <p className="section-label">{t("comingSoon.section")}</p>
+      <h1 className="page-title">{t(titleKey)}</h1>
       <div className="panel mt-8 max-w-2xl border-dashed">
-        <p className="font-mono text-sm text-slate-300">Coming Soon</p>
-        <p className="panel-copy">
-          This workspace is reserved for a future Workbench integration.
+        <p className="text-secondary font-mono text-sm">
+          {t("comingSoon.title")}
         </p>
+        <p className="panel-copy">{t("comingSoon.description")}</p>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@
 
 import { type FormEvent, useRef, useState } from "react";
 
+import { usePreferences } from "@/components/preferences-provider";
 import { streamWebResearch } from "@/lib/api";
 import type {
   RunResult,
@@ -13,10 +14,10 @@ import type {
 type DisplayStatus = RunStatus | "running";
 
 const statusStyles: Record<DisplayStatus, string> = {
-  running: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  stopped: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-  failed: "border-rose-500/30 bg-rose-500/10 text-rose-300",
+  running: "status-running",
+  completed: "status-completed",
+  stopped: "status-stopped",
+  failed: "status-failed",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -87,12 +88,13 @@ function formatMetric(value: number | null, suffix = ""): string {
 }
 
 export function WebResearchWorkspace() {
+  const { t } = usePreferences();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const inFlight = useRef(false);
 
   const canSubmit = query.trim().length > 0 && !loading;
@@ -109,7 +111,7 @@ export function WebResearchWorkspace() {
     inFlight.current = true;
     setResult(null);
     setTrace([]);
-    setError(null);
+    setError(false);
     setStarted(false);
     setLoading(true);
 
@@ -154,7 +156,7 @@ export function WebResearchWorkspace() {
             } else if (
               streamEvent.data.message === "web research execution failed"
             ) {
-              setError("Unable to complete web research.");
+              setError(true);
             } else {
               throw new Error("Invalid error web research stream event");
             }
@@ -166,29 +168,33 @@ export function WebResearchWorkspace() {
         throw new Error("Web research stream ended without a terminal event");
       }
     } catch {
-      setError("Unable to complete web research.");
+      setError(true);
     } finally {
       inFlight.current = false;
       setLoading(false);
     }
   }
 
+  const statusLabels: Record<DisplayStatus, string> = {
+    running: t("status.running"),
+    completed: t("status.completed"),
+    stopped: t("status.stopped"),
+    failed: t("status.failed"),
+  };
+
   return (
     <section className="mx-auto max-w-6xl">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="section-label">Research / Workspace</p>
-          <h1 className="page-title">Web Research</h1>
-          <p className="page-description">
-            Run a research question and inspect the final answer, agent
-            activity, metrics, and structured sources.
-          </p>
+          <p className="section-label">{t("research.section")}</p>
+          <h1 className="page-title">{t("research.title")}</h1>
+          <p className="page-description">{t("research.description")}</p>
         </div>
         {displayedStatus ? (
           <span
             className={`w-fit rounded-md border px-3 py-1.5 font-mono text-xs uppercase tracking-wider ${statusStyles[displayedStatus]}`}
           >
-            {displayedStatus}
+            {statusLabels[displayedStatus]}
           </span>
         ) : null}
       </div>
@@ -200,38 +206,40 @@ export function WebResearchWorkspace() {
       >
         <div className="flex items-center justify-between gap-4">
           <h2 id="question-heading" className="panel-title mt-0">
-            Question
+            {t("research.question")}
           </h2>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-slate-600">
-            SSE stream
+          <span className="text-muted font-mono text-[10px] uppercase tracking-wider">
+            {t("research.sseStream")}
           </span>
         </div>
         <label htmlFor="research-question" className="sr-only">
-          Research question
+          {t("research.questionLabel")}
         </label>
         <textarea
           id="research-question"
           rows={4}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Enter a research question..."
-          className="mt-4 w-full resize-none rounded-md border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500"
+          placeholder={t("research.questionPlaceholder")}
+          className="workbench-input mt-4 w-full resize-none rounded-md border px-4 py-3 text-sm outline-none"
         />
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm" aria-live="polite">
-            {error ? <p className="text-rose-300">{error}</p> : null}
+            {error ? <p className="text-error">{t("research.error")}</p> : null}
             {loading ? (
-              <p className="text-cyan-300">
-                {started ? "Run started." : "Starting stream..."}
+              <p className="text-accent">
+                {started
+                  ? t("research.runStarted")
+                  : t("research.startingStream")}
               </p>
             ) : null}
           </div>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-600"
+            className="primary-action rounded-md border px-4 py-2 text-sm font-medium"
           >
-            {loading ? "Running..." : "Run Research"}
+            {loading ? t("research.running") : t("research.run")}
           </button>
         </div>
       </form>
@@ -241,20 +249,20 @@ export function WebResearchWorkspace() {
           <section className="panel min-h-64" aria-labelledby="answer-heading">
             <div className="flex items-center justify-between gap-4">
               <h2 id="answer-heading" className="panel-title mt-0">
-                Answer
+                {t("research.answer")}
               </h2>
               {result ? (
-                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                  {result.status}
+                <span className="text-muted font-mono text-[10px] uppercase tracking-wider">
+                  {statusLabels[result.status]}
                 </span>
               ) : null}
             </div>
-            <div className="mt-6 whitespace-pre-wrap text-sm leading-7 text-slate-300">
+            <div className="text-secondary mt-6 whitespace-pre-wrap text-sm leading-7">
               {result ? (
-                result.output || "No final answer."
+                result.output || t("research.noFinalAnswer")
               ) : (
-                <span className="text-slate-600">
-                  The research answer will appear here after a run.
+                <span className="text-muted">
+                  {t("research.answerPlaceholder")}
                 </span>
               )}
             </div>
@@ -262,10 +270,10 @@ export function WebResearchWorkspace() {
 
           <section className="panel" aria-labelledby="sources-heading">
             <h2 id="sources-heading" className="panel-title mt-0">
-              Sources
+              {t("research.sources")}
             </h2>
             {result?.sources.length ? (
-              <ul className="mt-4 divide-y divide-slate-800">
+              <ul className="source-list mt-4">
                 {result.sources.map((source, index) => (
                   <li
                     key={`${source.title}-${source.url ?? index}`}
@@ -276,12 +284,12 @@ export function WebResearchWorkspace() {
                         href={source.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-sm text-cyan-300 hover:text-cyan-200 hover:underline"
+                        className="link-accent text-sm hover:underline"
                       >
                         {source.title}
                       </a>
                     ) : (
-                      <span className="text-sm text-slate-300">
+                      <span className="text-secondary text-sm">
                         {source.title}
                       </span>
                     )}
@@ -289,8 +297,8 @@ export function WebResearchWorkspace() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 text-sm text-slate-600">
-                No structured sources.
+              <p className="text-muted mt-4 text-sm">
+                {t("research.noSources")}
               </p>
             )}
           </section>
@@ -302,25 +310,24 @@ export function WebResearchWorkspace() {
             aria-labelledby="activity-heading"
           >
             <h2 id="activity-heading" className="panel-title mt-0">
-              Agent Activity
+              {t("research.activity")}
             </h2>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Activity is replayed after the current WRA run completes; native
-              real-time tool streaming is not yet available.
+            <p className="text-muted mt-2 text-xs leading-5">
+              {t("research.activityNotice")}
             </p>
             {trace.length ? (
-              <ol className="mt-5 space-y-4 border-l border-slate-800 pl-4">
+              <ol className="activity-list mt-5 space-y-4 border-l pl-4">
                 {trace.map((event) => (
                   <li key={`${event.sequence}-${event.event_type}-${event.name}`}>
-                    <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
+                    <div className="text-muted flex items-center gap-2 font-mono text-[11px]">
                       <span>#{event.sequence}</span>
                       <span>{event.event_type}</span>
                     </div>
-                    <p className="mt-1 text-sm font-medium text-slate-200">
+                    <p className="text-primary mt-1 text-sm font-medium">
                       {event.name}
                     </p>
                     {event.detail ? (
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                      <p className="text-muted mt-1 text-xs leading-5">
                         {event.detail}
                       </p>
                     ) : null}
@@ -328,28 +335,34 @@ export function WebResearchWorkspace() {
                 ))}
               </ol>
             ) : (
-              <p className="mt-5 font-mono text-xs text-slate-600">
-                No trace events.
+              <p className="text-muted mt-5 font-mono text-xs">
+                {t("research.noTrace")}
               </p>
             )}
           </section>
 
           <section className="panel" aria-labelledby="metrics-heading">
             <h2 id="metrics-heading" className="panel-title mt-0">
-              Metrics
+              {t("research.metrics")}
             </h2>
             <dl className="mt-4 grid grid-cols-3 gap-3">
               {[
-                ["Iterations", formatMetric(result?.metrics.iterations ?? null)],
-                ["Tool Calls", formatMetric(result?.metrics.tool_calls ?? null)],
                 [
-                  "Duration",
+                  t("research.iterations"),
+                  formatMetric(result?.metrics.iterations ?? null),
+                ],
+                [
+                  t("research.toolCalls"),
+                  formatMetric(result?.metrics.tool_calls ?? null),
+                ],
+                [
+                  t("research.duration"),
                   formatMetric(result?.metrics.duration_ms ?? null, " ms"),
                 ],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-md bg-slate-950 p-3">
-                  <dt className="text-[11px] text-slate-500">{label}</dt>
-                  <dd className="mt-2 font-mono text-sm text-slate-300">
+                <div key={label} className="metric-card rounded-md p-3">
+                  <dt className="text-muted text-[11px]">{label}</dt>
+                  <dd className="text-secondary mt-2 font-mono text-sm">
                     {value}
                   </dd>
                 </div>

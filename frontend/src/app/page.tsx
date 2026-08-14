@@ -1,36 +1,33 @@
+"use client";
+
+import { usePreferences } from "@/components/preferences-provider";
+
 export default function DashboardPage() {
+  const { t } = usePreferences();
+
   return (
     <section className="mx-auto max-w-6xl">
-      <p className="section-label">Workbench / Overview</p>
-      <h1 className="page-title">Dashboard</h1>
-      <p className="page-description">
-        A single surface for running, inspecting, and comparing agent
-        engineering projects.
-      </p>
+      <p className="section-label">{t("dashboard.section")}</p>
+      <h1 className="page-title">{t("dashboard.title")}</h1>
+      <p className="page-description">{t("dashboard.description")}</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="panel">
-          <p className="panel-kicker">Available workspace</p>
-          <h2 className="panel-title">Web Research</h2>
-          <p className="panel-copy">
-            The first integration surface for research runs, activity, and
-            metrics.
-          </p>
+          <p className="panel-kicker">{t("dashboard.availableWorkspace")}</p>
+          <h2 className="panel-title">{t("dashboard.webResearch")}</h2>
+          <p className="panel-copy">{t("dashboard.webResearchDescription")}</p>
         </article>
         <article className="panel">
-          <p className="panel-kicker">Workbench mode</p>
-          <h2 className="panel-title">Local development</h2>
+          <p className="panel-kicker">{t("dashboard.workbenchMode")}</p>
+          <h2 className="panel-title">{t("dashboard.localDevelopment")}</h2>
           <p className="panel-copy">
-            This shell is ready for backend integration in a later step.
+            {t("dashboard.localDevelopmentDescription")}
           </p>
         </article>
         <article className="panel sm:col-span-2 xl:col-span-1">
-          <p className="panel-kicker">Project scope</p>
-          <h2 className="panel-title">v0.1.0</h2>
-          <p className="panel-copy">
-            Navigation and workspace foundations are in place without live
-            requests.
-          </p>
+          <p className="panel-kicker">{t("dashboard.projectScope")}</p>
+          <h2 className="panel-title">{t("dashboard.version")}</h2>
+          <p className="panel-copy">{t("dashboard.scopeDescription")}</p>
         </article>
       </div>
     </section>

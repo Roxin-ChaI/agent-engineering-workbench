@@ -3,55 +3,61 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { usePreferences } from "@/components/preferences-provider";
+import type { TranslationKey } from "@/lib/i18n";
+
 const primaryNavigation = [
-  { label: "Dashboard", href: "/" },
-  { label: "Context", href: "/context" },
-  { label: "Prompts", href: "/prompts" },
-  { label: "Resume", href: "/resume" },
-  { label: "GitHub", href: "/github" },
-];
+  { labelKey: "navigation.dashboard", href: "/" },
+  { labelKey: "navigation.context", href: "/context" },
+  { labelKey: "navigation.prompts", href: "/prompts" },
+  { labelKey: "navigation.resume", href: "/resume" },
+  { labelKey: "navigation.github", href: "/github" },
+] satisfies { labelKey: TranslationKey; href: string }[];
 
 function NavigationLink({
   href,
-  label,
+  labelKey,
   nested = false,
 }: {
   href: string;
-  label: string;
+  labelKey: TranslationKey;
   nested?: boolean;
 }) {
   const pathname = usePathname();
+  const { t } = usePreferences();
   const active = pathname === href;
 
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`block whitespace-nowrap rounded-md border px-3 py-2 text-sm transition-colors ${
+      className={`nav-link block whitespace-nowrap rounded-md border px-3 py-2 text-sm ${
         nested ? "md:ml-3" : ""
-      } ${
-        active
-          ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
-          : "border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-100"
-      }`}
+      } ${active ? "nav-link-active" : "nav-link-idle"}`}
     >
-      {label}
+      {t(labelKey)}
     </Link>
   );
 }
 
 export function Sidebar() {
+  const { t } = usePreferences();
+
   return (
-    <aside className="shrink-0 border-b border-slate-800 bg-slate-950 md:w-60 md:border-r md:border-b-0">
+    <aside className="shell-sidebar shrink-0 border-b md:w-60 md:border-r md:border-b-0">
       <nav
-        aria-label="Workbench navigation"
+        aria-label={t("navigation.label")}
         className="flex gap-1 overflow-x-auto px-4 py-3 md:flex-col md:overflow-visible md:px-3 md:py-6"
       >
         <NavigationLink {...primaryNavigation[0]} />
-        <div className="hidden px-3 pt-4 pb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-600 md:block">
-          Research
+        <div className="sidebar-section-label hidden px-3 pt-4 pb-1 font-mono text-[10px] uppercase tracking-[0.18em] md:block">
+          {t("navigation.research")}
         </div>
-        <NavigationLink href="/research/web" label="Web Research" nested />
+        <NavigationLink
+          href="/research/web"
+          labelKey="navigation.webResearch"
+          nested
+        />
         <div className="hidden pt-2 md:block" />
         {primaryNavigation.slice(1).map((item) => (
           <NavigationLink key={item.href} {...item} />
