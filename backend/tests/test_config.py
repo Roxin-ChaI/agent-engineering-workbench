@@ -10,6 +10,7 @@ SETTINGS_ENVIRONMENT_VARIABLES = (
     "MODEL_NAME",
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
+    "CORS_ORIGINS",
 )
 
 
@@ -30,6 +31,10 @@ def test_default_settings() -> None:
     assert settings.model_provider == "deepseek"
     assert settings.model_name == "deepseek-v4-flash"
     assert settings.deepseek_base_url == "https://api.deepseek.com"
+    assert settings.cors_origins == (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    )
 
 
 def test_environment_variables_override_defaults(
@@ -39,6 +44,10 @@ def test_environment_variables_override_defaults(
     monkeypatch.setenv("MODEL_NAME", "configured-model")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "configured-api-key")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.example")
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        '[" https://frontend.example ","http://127.0.0.1:4000"]',
+    )
 
     settings = Settings()
 
@@ -46,6 +55,10 @@ def test_environment_variables_override_defaults(
     assert settings.model_name == "configured-model"
     assert settings.deepseek_api_key == "configured-api-key"
     assert settings.deepseek_base_url == "https://deepseek.example"
+    assert settings.cors_origins == (
+        "https://frontend.example",
+        "http://127.0.0.1:4000",
+    )
 
 
 def test_empty_provider_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,3 +92,26 @@ def test_api_key_is_excluded_from_repr(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings()
 
     assert api_key not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    "origins",
+    ["[]", '["   "]'],
+)
+def test_empty_cors_origins_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    origins: str,
+) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", origins)
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_wildcard_cors_origin_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", '["*"]')
+
+    with pytest.raises(ValidationError):
+        Settings()

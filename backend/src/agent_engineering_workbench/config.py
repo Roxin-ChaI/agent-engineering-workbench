@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     model_name: str = "deepseek-v4-flash"
     deepseek_api_key: str | None = Field(default=None, repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    )
 
     @field_validator("model_provider", "model_name")
     @classmethod
@@ -24,6 +28,19 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_base_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value:
+            raise ValueError("cors_origins must not be empty")
+
+        normalized_origins = tuple(origin.strip() for origin in value)
+        if any(not origin for origin in normalized_origins):
+            raise ValueError("CORS origins must not be empty")
+        if "*" in normalized_origins:
+            raise ValueError("wildcard CORS origins are not allowed")
+        return normalized_origins
 
 
 @lru_cache
