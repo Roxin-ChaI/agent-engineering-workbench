@@ -17,3 +17,5 @@ Workbench 仅负责 UI、Integration、Presentation 和 API 边界。它不会�
 模型通过统一的 Model Provider / Model Client 抽象接入。v0.1.0 的默认 Provider 为 DeepSeek、默认模型为 `deepseek-v4-flash`，且只实现 DeepSeek Adapter。Provider 与模型名称由配置传入，模型实例通过统一工厂或依赖注入创建；Workbench 核心业务逻辑不依赖 DeepSeek SDK 或具体模型类。当前版本不实现其他 Provider，只保留可替换扩展边界。
 
 详细范围与架构约束参见 [`docs/requirements.md`](docs/requirements.md) 和 [`docs/architecture.md`](docs/architecture.md)。
+
+本地 Fake/Real WRA 运行方式参见 [`docs/local-development.md`](docs/local-development.md)。
