@@ -9,6 +9,7 @@ from web_research_agent.models import (  # type: ignore[import-untyped]
 )
 
 from agent_engineering_workbench.adapter import WorkbenchAdapter
+from agent_engineering_workbench.adapters import wra
 from agent_engineering_workbench.adapters.wra import WRAAdapter
 from agent_engineering_workbench.contracts import (
     RunResult,
@@ -56,8 +57,52 @@ def test_completed_result_is_mapped() -> None:
     assert result.status is RunStatus.COMPLETED
     assert result.output == "Final answer"
     assert result.metrics.iterations == 2
-    assert result.metrics.duration_ms is None
+    assert result.metrics.duration_ms is not None
     assert agent.questions == ["research question"]
+
+
+def test_duration_uses_agent_run_elapsed_time_in_milliseconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    times = iter((10.0, 12.5))
+
+    class FakeTime:
+        @staticmethod
+        def perf_counter() -> float:
+            events.append("time")
+            return next(times)
+
+    trace_step = make_trace_step(
+        "call-1",
+        "query",
+        '[{"title":"Source","url":"https://example.com"}]',
+    )
+
+    class TimedFakeWRAAgent:
+        def run(self, question: str) -> AgentResult:
+            assert question == "research question"
+            events.append("run")
+            return AgentResult(
+                answer="Final answer",
+                trace=(trace_step,),
+                iterations=2,
+                stop_reason="completed",
+            )
+
+    monkeypatch.setattr(wra, "time", FakeTime())
+
+    result = WRAAdapter(TimedFakeWRAAgent()).run("research question")
+
+    assert events == ["time", "run", "time"]
+    assert result.metrics.duration_ms == pytest.approx(2500.0)
+    assert result.metrics.iterations == 2
+    assert result.metrics.tool_calls == 1
+    assert result.status is RunStatus.COMPLETED
+    assert [event.name for event in result.trace] == ["web_search"]
+    assert result.sources == (
+        SourceReference(title="Source", url="https://example.com"),
+    )
 
 
 def test_max_iterations_result_is_mapped_to_stopped() -> None:

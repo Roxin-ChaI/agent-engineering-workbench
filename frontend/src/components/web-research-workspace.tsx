@@ -87,6 +87,24 @@ function formatMetric(value: number | null, suffix = ""): string {
   return value === null ? "—" : `${value}${suffix}`;
 }
 
+function formatDuration(durationMs: number | null): string {
+  if (durationMs === null) {
+    return "—";
+  }
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)} ms`;
+  }
+  if (durationMs < 60_000) {
+    const seconds = (durationMs / 1000).toFixed(1).replace(/\.0$/, "");
+    return `${seconds} s`;
+  }
+
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+}
+
 export function WebResearchWorkspace() {
   const { t } = usePreferences();
   const [query, setQuery] = useState("");
@@ -357,7 +375,7 @@ export function WebResearchWorkspace() {
                 ],
                 [
                   t("research.duration"),
-                  formatMetric(result?.metrics.duration_ms ?? null, " ms"),
+                  formatDuration(result?.metrics.duration_ms ?? null),
                 ],
               ].map(([label, value]) => (
                 <div key={label} className="metric-card rounded-md p-3">

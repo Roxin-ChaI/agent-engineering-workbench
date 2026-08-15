@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Protocol
 
 from web_research_agent.models import (  # type: ignore[import-untyped]
@@ -27,7 +28,10 @@ class WRAAdapter:
         if not user_input.strip():
             raise ValueError("user_input must not be empty")
 
+        started_at = time.perf_counter()
         result = self._agent.run(user_input)
+        finished_at = time.perf_counter()
+        duration_ms = (finished_at - started_at) * 1000
         status = self._map_status(result)
 
         return RunResult(
@@ -40,7 +44,7 @@ class WRAAdapter:
             metrics=RunMetrics(
                 iterations=result.iterations,
                 tool_calls=len(result.trace),
-                duration_ms=None,
+                duration_ms=duration_ms,
             ),
             sources=self._extract_sources(result.trace),
         )
