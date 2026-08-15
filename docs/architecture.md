@@ -16,7 +16,7 @@ Frontend 使用 Next.js、React、TypeScript 和 Tailwind CSS，提供 Workbench
 
 Workbench Backend 使用 Python 3.12 和 FastAPI。它负责 API 边界、请求校验、集成编排、响应标准化和基础错误处理，不承载 WRA 的运行时或模型逻辑。
 
-Frontend 与 Backend 使用 REST 通信，并定义 SSE 接口边界，为后续运行过程流式展示预留扩展能力。Workbench 业务层不得直接依赖 DeepSeek SDK 或具体模型类。
+Frontend 与 Backend 使用 REST 通信，并通过 `/api/research/web/stream` 定义 SSE 事件传输边界。当前 WRA 公共 `run()` 是同步、非原生流式接口，因此 v0.1.0 先发送 `started`，再完整执行 WRA；WRA 返回后按顺序 replay `RunResult.trace`，最后发送唯一的 `completed`、`stopped` 或 `error` 事件。这不是 native real-time Tool/Agent streaming。若后续 WRA 暴露原生 event/stream API，可在不改变 Frontend SSE contract 的前提下升级为实时事件。Workbench 业务层不得直接依赖 DeepSeek SDK 或具体模型类。
 
 ## Adapter Layer
 
@@ -41,9 +41,9 @@ PKRA、Context Window Compressor、LLM Context Explorer、GitHub Reviewer、Resu
 ## Data Flow
 
 1. Browser 中的用户操作进入 Frontend。
-2. Frontend 通过 REST 请求 Workbench Backend；后续流式过程可使用预留的 SSE 边界。
+2. Frontend 通过 REST 或 SSE 请求 Workbench Backend；SSE 请求先收到 `started`。
 3. Workbench Backend 将标准请求交给 WRA Adapter。
-4. WRA Adapter 转换请求并调用 WRA，而不复制其内部运行逻辑。
+4. WRA Adapter 转换请求并同步调用 WRA，而不复制其内部运行逻辑。
 5. WRA 通过 Model Abstraction 获取 Model Client；统一工厂或依赖注入根据配置创建 DeepSeek Adapter，并使用 `deepseek-v4-flash`。
-6. WRA 的结果、Activity / Trace、Metrics 或错误由 Adapter Layer 标准化。
-7. Workbench Backend 通过 API 返回标准响应，由 Frontend 完成展示。
+6. WRA 返回后，Adapter Layer 标准化结果、Activity / Trace、Metrics 或错误；SSE 按顺序 replay trace，再发送 terminal event。
+7. Frontend 使用同一 SSE contract 完成展示；当前 replay 语义可在 WRA 支持原生 streaming 后升级为实时事件。

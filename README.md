@@ -6,7 +6,7 @@
 
 第一版只接入 `web-research-agent`（WRA），提供 Web Research 页面以及运行结果、Agent Activity / Trace 和 Metrics 展示。
 
-技术栈：Frontend 使用 Next.js、React、TypeScript 和 Tailwind CSS；Backend 使用 Python 3.12 和 FastAPI；接口采用 REST，并通过 SSE 为后续运行过程流式展示预留边界。
+技术栈：Frontend 使用 Next.js、React、TypeScript 和 Tailwind CSS；Backend 使用 Python 3.12 和 FastAPI；接口采用 REST 与 SSE。v0.1.0 的 SSE 会在 WRA 同步运行完成后 replay trace，并非原生实时 Agent/Tool streaming。
 
 调用链固定为：
 
