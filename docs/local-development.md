@@ -4,15 +4,27 @@
 
 - Python 3.12
 - Node.js and npm
-- A separate local WRA repository
 - The Workbench `.venv`
-- WRA installed into the Workbench environment in editable mode:
 
-  ```sh
-  .venv/bin/python -m pip install -e /Users/mac/Projects/web-research-agent
-  ```
+## Standard Installation
 
-The absolute path above is only for the current local development setup. It is not a deployable dependency strategy.
+The Backend package metadata pins `web-research-agent` to the GitHub tag `v0.2.0`. A normal Backend installation resolves WRA from that fixed tag:
+
+```sh
+.venv/bin/python -m pip install -e './backend[dev]'
+```
+
+The formal dependency does not use a local absolute path or a floating branch.
+
+## Local WRA Development Override
+
+When developing WRA and Workbench together, install the separate local WRA repository into the Workbench environment in editable mode:
+
+```sh
+.venv/bin/python -m pip install -e /Users/mac/Projects/web-research-agent
+```
+
+This is only a local development override: the current environment uses the local WRA source directly. It is not the formal project dependency, and the absolute path must not be added to `pyproject.toml`.
 
 ## Fake GUI Run
 

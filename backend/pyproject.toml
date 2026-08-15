@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "pydantic-settings",
+    "web-research-agent @ git+https://github.com/Roxin-ChaI/web-research-agent.git@v0.2.0",
 ]
 
 [project.optional-dependencies]
