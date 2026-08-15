@@ -1,21 +1,80 @@
+**English** | [简体中文](README.zh-CN.md)
+
 # Agent Engineering Workbench
 
-一个用于统一管理和展示 AI Agent 工程项目的 Web Workbench。
+A modular Web workbench for integrating, running, and inspecting independent AI Agent engineering projects through a unified interface.
 
 ## v0.1.0
 
-第一版只接入 `web-research-agent`（WRA），提供 Web Research 页面以及运行结果、Agent Activity / Trace 和 Metrics 展示。
+The first release integrates one independent project: [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent) v0.2.0. It provides the Workbench shell and a Web Research workspace without copying or reimplementing the WRA runtime, model integration, or search logic.
 
-技术栈：Frontend 使用 Next.js、React、TypeScript 和 Tailwind CSS；Backend 使用 Python 3.12 和 FastAPI；接口采用 REST 与 SSE。v0.1.0 的 SSE 会在 WRA 同步运行完成后 replay trace，并非原生实时 Agent/Tool streaming。
+## Features
 
-调用链固定为：
+- Web Research workflow
+- Final Answer display
+- Agent Activity / Trace replay
+- Iteration, tool-call, and WRA execution-duration Metrics
+- Structured Sources
+- English and Chinese UI
+- Dark and Light themes with persisted preferences
+- Fake local integration mode and production WRA integration
 
-`Browser → Frontend → Workbench Backend → Adapter Layer → WRA → Model Abstraction → DeepSeek Adapter → deepseek-v4-flash`
+Modules outside the v0.1.0 scope remain placeholders and are not presented as completed integrations.
 
-Workbench 仅负责 UI、Integration、Presentation 和 API 边界。它不会复制或重新实现 WRA 的 Agent Runtime、LangChain Runtime、Web Search 或模型逻辑。Adapter 隔离 Workbench 与 WRA 内部数据结构，并为后续项目提供统一扩展点。
+## Architecture
 
-模型通过统一的 Model Provider / Model Client 抽象接入。v0.1.0 的默认 Provider 为 DeepSeek、默认模型为 `deepseek-v4-flash`，且只实现 DeepSeek Adapter。Provider 与模型名称由配置传入，模型实例通过统一工厂或依赖注入创建；Workbench 核心业务逻辑不依赖 DeepSeek SDK 或具体模型类。当前版本不实现其他 Provider，只保留可替换扩展边界。
+```text
+Browser
+→ Next.js
+→ FastAPI
+→ WRAAdapter
+→ WebResearchAgent
+→ DeepSeek V4 Flash / DDGS
+→ RunResult
+→ SSE
+→ GUI
+```
 
-详细范围与架构约束参见 [`docs/requirements.md`](docs/requirements.md) 和 [`docs/architecture.md`](docs/architecture.md)。
+WRA remains an independent repository and is pinned to v0.2.0 as a reproducible Git dependency. The Workbench does not copy WRA source code. `WRAAdapter` maps WRA public result DTOs into the Workbench-owned `RunResult` contract, while the adapter contract provides an extension boundary for future project integrations.
 
-本地 Fake/Real WRA 运行方式参见 [`docs/local-development.md`](docs/local-development.md)。
+## SSE Semantics
+
+The current WRA `run()` API is synchronous. In v0.1.0, `/api/research/web/stream` uses SSE to:
+
+1. emit `started`;
+2. execute WRA;
+3. replay the trace in order after WRA completes; and
+4. emit one terminal `completed`, `stopped`, or `error` event.
+
+Native real-time agent/tool streaming is not yet available. If WRA later exposes a native event or stream API, the Backend can emit live events without changing the Frontend SSE contract.
+
+## Tech Stack
+
+- Python 3.12
+- FastAPI
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- DeepSeek V4 Flash (`deepseek-v4-flash`)
+- DDGS
+- web-research-agent v0.2.0
+
+## Quality Baseline
+
+- Backend: 88 tests passed
+- Ruff: PASS
+- mypy strict: PASS
+- pip check: PASS
+- Frontend ESLint: PASS
+- TypeScript: PASS
+- Next.js production build: PASS
+- Fake GUI E2E: PASS
+- Real GUI → WRA → DeepSeek/DDGS E2E: PASS
+- Fresh Python 3.12 installation: PASS
+
+## Documentation
+
+- [Requirements](docs/requirements.md)
+- [Architecture](docs/architecture.md)
+- [Local development](docs/local-development.md)
