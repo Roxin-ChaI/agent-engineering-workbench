@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     model_name: str = "deepseek-v4-flash"
     deepseek_api_key: str | None = Field(default=None, repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
+    pkra_database_url: str | None = Field(default=None, repr=False)
+    pkra_enable_web_search: bool = True
     cors_origins: tuple[str, ...] = (
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -28,6 +30,16 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_base_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("pkra_database_url")
+    @classmethod
+    def validate_optional_database_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError("must not be empty")
+        return normalized_value
 
     @field_validator("cors_origins")
     @classmethod

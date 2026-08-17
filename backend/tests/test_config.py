@@ -10,6 +10,8 @@ SETTINGS_ENVIRONMENT_VARIABLES = (
     "MODEL_NAME",
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
+    "PKRA_DATABASE_URL",
+    "PKRA_ENABLE_WEB_SEARCH",
     "CORS_ORIGINS",
 )
 
@@ -31,6 +33,8 @@ def test_default_settings() -> None:
     assert settings.model_provider == "deepseek"
     assert settings.model_name == "deepseek-v4-flash"
     assert settings.deepseek_base_url == "https://api.deepseek.com"
+    assert settings.pkra_database_url is None
+    assert settings.pkra_enable_web_search is True
     assert settings.cors_origins == (
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -45,6 +49,11 @@ def test_environment_variables_override_defaults(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "configured-api-key")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.example")
     monkeypatch.setenv(
+        "PKRA_DATABASE_URL",
+        " postgresql+psycopg://user:password@localhost/research ",
+    )
+    monkeypatch.setenv("PKRA_ENABLE_WEB_SEARCH", "false")
+    monkeypatch.setenv(
         "CORS_ORIGINS",
         '[" https://frontend.example ","http://127.0.0.1:4000"]',
     )
@@ -55,6 +64,11 @@ def test_environment_variables_override_defaults(
     assert settings.model_name == "configured-model"
     assert settings.deepseek_api_key == "configured-api-key"
     assert settings.deepseek_base_url == "https://deepseek.example"
+    assert (
+        settings.pkra_database_url
+        == "postgresql+psycopg://user:password@localhost/research"
+    )
+    assert settings.pkra_enable_web_search is False
     assert settings.cors_origins == (
         "https://frontend.example",
         "http://127.0.0.1:4000",
@@ -92,6 +106,26 @@ def test_api_key_is_excluded_from_repr(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings()
 
     assert api_key not in repr(settings)
+
+
+def test_pkra_database_url_is_excluded_from_repr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_url = "postgresql+psycopg://user:secret@localhost/research"
+    monkeypatch.setenv("PKRA_DATABASE_URL", database_url)
+
+    settings = Settings()
+
+    assert database_url not in repr(settings)
+
+
+def test_empty_pkra_database_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PKRA_DATABASE_URL", "   ")
+
+    with pytest.raises(ValidationError):
+        Settings()
 
 
 @pytest.mark.parametrize(
