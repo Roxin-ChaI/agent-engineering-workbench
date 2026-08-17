@@ -39,7 +39,7 @@ class FakeRunner:
         self.result = result
         self.queries: list[str] = []
 
-    def __call__(self, query: str) -> PKRAResultLike:
+    def run(self, query: str) -> PKRAResultLike:
         self.queries.append(query)
         return self.result
 
@@ -91,7 +91,7 @@ def test_duration_uses_runner_elapsed_time_in_milliseconds(
             return next(times)
 
     class TimedRunner:
-        def __call__(self, query: str) -> PKRAResultLike:
+        def run(self, query: str) -> PKRAResultLike:
             assert query == "research question"
             events.append("run")
             return make_result(iterations=5, tool_calls_executed=6)
@@ -165,7 +165,7 @@ def test_runner_exception_is_propagated_unchanged() -> None:
     expected_error = RuntimeError("PKRA failed")
 
     class FailingRunner:
-        def __call__(self, query: str) -> PKRAResultLike:
+        def run(self, query: str) -> PKRAResultLike:
             assert query == "research question"
             raise expected_error
 

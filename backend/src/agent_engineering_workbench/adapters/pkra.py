@@ -33,7 +33,7 @@ class PKRAResultLike(Protocol):
 
 
 class PKRARunner(Protocol):
-    def __call__(self, query: str) -> PKRAResultLike: ...
+    def run(self, query: str) -> PKRAResultLike: ...
 
 
 _TERMINATION_STATUS = {
@@ -52,7 +52,7 @@ class PKRAAdapter:
             raise ValueError("user_input must not be empty")
 
         started_at = time.perf_counter()
-        result = self._runner(query)
+        result = self._runner.run(query)
         finished_at = time.perf_counter()
 
         status = self._map_status(result.termination_reason)
