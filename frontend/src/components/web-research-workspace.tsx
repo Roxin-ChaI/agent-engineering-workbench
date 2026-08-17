@@ -3,7 +3,10 @@
 import { type FormEvent, useRef, useState } from "react";
 
 import { usePreferences } from "@/components/preferences-provider";
-import { streamWebResearch } from "@/lib/api";
+import {
+  streamKnowledgeResearch,
+  streamWebResearch,
+} from "@/lib/api";
 import type {
   RunResult,
   RunStatus,
@@ -12,6 +15,7 @@ import type {
 } from "@/lib/contracts";
 
 type DisplayStatus = RunStatus | "running";
+type ResearchWorkspaceKind = "web" | "knowledge";
 
 const statusStyles: Record<DisplayStatus, string> = {
   running: "status-running",
@@ -105,7 +109,7 @@ function formatDuration(durationMs: number | null): string {
   return `${minutes}m ${seconds}s`;
 }
 
-export function WebResearchWorkspace() {
+function ResearchWorkspace({ kind }: { kind: ResearchWorkspaceKind }) {
   const { t } = usePreferences();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
@@ -114,6 +118,13 @@ export function WebResearchWorkspace() {
   const [started, setStarted] = useState(false);
   const [error, setError] = useState(false);
   const inFlight = useRef(false);
+  const isKnowledgeResearch = kind === "knowledge";
+  const streamResearch = isKnowledgeResearch
+    ? streamKnowledgeResearch
+    : streamWebResearch;
+  const safeFailureMessage = isKnowledgeResearch
+    ? "knowledge research execution failed"
+    : "web research execution failed";
 
   const canSubmit = query.trim().length > 0 && !loading;
   const displayedStatus: DisplayStatus | null = loading
@@ -137,7 +148,7 @@ export function WebResearchWorkspace() {
     const seenTraceSequences = new Set<number>();
 
     try {
-      await streamWebResearch(query, (streamEvent) => {
+      await streamResearch(query, (streamEvent) => {
         if (terminalReceived) {
           return;
         }
@@ -145,13 +156,13 @@ export function WebResearchWorkspace() {
         switch (streamEvent.event_type) {
           case "started":
             if (streamEvent.data.status !== "started") {
-              throw new Error("Invalid started web research stream event");
+              throw new Error("Invalid started research stream event");
             }
             setStarted(true);
             break;
           case "trace":
             if (!isTraceEvent(streamEvent.data)) {
-              throw new Error("Invalid trace web research stream event");
+              throw new Error("Invalid trace research stream event");
             }
             const traceEvent = streamEvent.data;
             if (!seenTraceSequences.has(streamEvent.sequence)) {
@@ -171,19 +182,17 @@ export function WebResearchWorkspace() {
             terminalReceived = true;
             if (isRunResult(streamEvent.data) && streamEvent.data.status === "failed") {
               setResult(streamEvent.data);
-            } else if (
-              streamEvent.data.message === "web research execution failed"
-            ) {
+            } else if (streamEvent.data.message === safeFailureMessage) {
               setError(true);
             } else {
-              throw new Error("Invalid error web research stream event");
+              throw new Error("Invalid error research stream event");
             }
             break;
         }
       });
 
       if (!terminalReceived) {
-        throw new Error("Web research stream ended without a terminal event");
+        throw new Error("Research stream ended without a terminal event");
       }
     } catch {
       setError(true);
@@ -205,8 +214,20 @@ export function WebResearchWorkspace() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="section-label">{t("research.section")}</p>
-          <h1 className="page-title">{t("research.title")}</h1>
-          <p className="page-description">{t("research.description")}</p>
+          <h1 className="page-title">
+            {t(
+              isKnowledgeResearch
+                ? "knowledgeResearch.title"
+                : "research.title",
+            )}
+          </h1>
+          <p className="page-description">
+            {t(
+              isKnowledgeResearch
+                ? "knowledgeResearch.description"
+                : "research.description",
+            )}
+          </p>
         </div>
         {displayedStatus ? (
           <span
@@ -238,12 +259,24 @@ export function WebResearchWorkspace() {
           rows={4}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("research.questionPlaceholder")}
+          placeholder={t(
+            isKnowledgeResearch
+              ? "knowledgeResearch.questionPlaceholder"
+              : "research.questionPlaceholder",
+          )}
           className="workbench-input mt-4 w-full resize-none rounded-md border px-4 py-3 text-sm outline-none"
         />
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm" aria-live="polite">
-            {error ? <p className="text-error">{t("research.error")}</p> : null}
+            {error ? (
+              <p className="text-error">
+                {t(
+                  isKnowledgeResearch
+                    ? "knowledgeResearch.error"
+                    : "research.error",
+                )}
+              </p>
+            ) : null}
             {loading ? (
               <p className="text-accent">
                 {started
@@ -280,7 +313,11 @@ export function WebResearchWorkspace() {
                 result.output || t("research.noFinalAnswer")
               ) : (
                 <span className="text-muted">
-                  {t("research.answerPlaceholder")}
+                  {t(
+                    isKnowledgeResearch
+                      ? "knowledgeResearch.answerPlaceholder"
+                      : "research.answerPlaceholder",
+                  )}
                 </span>
               )}
             </div>
@@ -288,7 +325,11 @@ export function WebResearchWorkspace() {
 
           <section className="panel" aria-labelledby="sources-heading">
             <h2 id="sources-heading" className="panel-title mt-0">
-              {t("research.sources")}
+              {t(
+                isKnowledgeResearch
+                  ? "knowledgeResearch.sources"
+                  : "research.sources",
+              )}
             </h2>
             {result?.sources.length ? (
               <ul className="source-list mt-4">
@@ -316,7 +357,11 @@ export function WebResearchWorkspace() {
               </ul>
             ) : (
               <p className="text-muted mt-4 text-sm">
-                {t("research.noSources")}
+                {t(
+                  isKnowledgeResearch
+                    ? "knowledgeResearch.noSources"
+                    : "research.noSources",
+                )}
               </p>
             )}
           </section>
@@ -331,7 +376,11 @@ export function WebResearchWorkspace() {
               {t("research.activity")}
             </h2>
             <p className="text-muted mt-2 text-xs leading-5">
-              {t("research.activityNotice")}
+              {t(
+                isKnowledgeResearch
+                  ? "knowledgeResearch.activityNotice"
+                  : "research.activityNotice",
+              )}
             </p>
             {trace.length ? (
               <ol className="activity-list mt-5 space-y-4 border-l pl-4">
@@ -354,7 +403,11 @@ export function WebResearchWorkspace() {
               </ol>
             ) : (
               <p className="text-muted mt-5 font-mono text-xs">
-                {t("research.noTrace")}
+                {t(
+                  isKnowledgeResearch
+                    ? "knowledgeResearch.noTrace"
+                    : "research.noTrace",
+                )}
               </p>
             )}
           </section>
@@ -391,4 +444,12 @@ export function WebResearchWorkspace() {
       </div>
     </section>
   );
+}
+
+export function WebResearchWorkspace() {
+  return <ResearchWorkspace kind="web" />;
+}
+
+export function KnowledgeResearchWorkspace() {
+  return <ResearchWorkspace kind="knowledge" />;
 }

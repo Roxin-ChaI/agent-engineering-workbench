@@ -61,6 +61,21 @@ export const translations = {
     "research.sources": "Sources",
     "research.noSources": "No structured sources.",
     "research.error": "Unable to complete web research.",
+    "knowledgeResearch.title": "Knowledge Research",
+    "knowledgeResearch.description":
+      "PKRA combines local knowledge retrieval with agent-driven research.",
+    "knowledgeResearch.questionPlaceholder":
+      "Enter a question about your indexed knowledge...",
+    "knowledgeResearch.answerPlaceholder":
+      "The knowledge research answer will appear here after a run.",
+    "knowledgeResearch.activityNotice":
+      "Activity is replayed after the current PKRA run completes; native real-time tool streaming is not yet available.",
+    "knowledgeResearch.noTrace":
+      "No activity trace is available for this run.",
+    "knowledgeResearch.sources": "Sources / Evidence",
+    "knowledgeResearch.noSources":
+      "No structured sources are available for this run.",
+    "knowledgeResearch.error": "Unable to complete knowledge research.",
     "status.running": "running",
     "status.completed": "completed",
     "status.stopped": "stopped",
@@ -125,6 +140,18 @@ export const translations = {
     "research.sources": "来源",
     "research.noSources": "暂无结构化来源。",
     "research.error": "无法完成 Web 研究。",
+    "knowledgeResearch.title": "知识研究",
+    "knowledgeResearch.description":
+      "PKRA 将本地知识检索与 Agent 驱动的研究相结合。",
+    "knowledgeResearch.questionPlaceholder": "输入关于已索引知识的问题...",
+    "knowledgeResearch.answerPlaceholder":
+      "运行完成后，知识研究答案将显示在此处。",
+    "knowledgeResearch.activityNotice":
+      "活动会在当前 PKRA 运行完成后回放；暂不支持原生实时工具流。",
+    "knowledgeResearch.noTrace": "本次运行没有可用的活动追踪。",
+    "knowledgeResearch.sources": "来源 / 证据",
+    "knowledgeResearch.noSources": "本次运行没有可用的结构化来源。",
+    "knowledgeResearch.error": "无法完成知识研究。",
     "status.running": "运行中",
     "status.completed": "已完成",
     "status.stopped": "已停止",
