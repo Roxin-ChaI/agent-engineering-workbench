@@ -58,6 +58,11 @@ export function Sidebar() {
           labelKey="navigation.webResearch"
           nested
         />
+        <NavigationLink
+          href="/research/knowledge"
+          labelKey="navigation.knowledgeResearch"
+          nested
+        />
         <div className="hidden pt-2 md:block" />
         {primaryNavigation.slice(1).map((item) => (
           <NavigationLink key={item.href} {...item} />
