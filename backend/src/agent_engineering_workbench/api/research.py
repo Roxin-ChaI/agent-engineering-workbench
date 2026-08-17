@@ -7,7 +7,10 @@ from starlette.responses import StreamingResponse
 
 from agent_engineering_workbench.adapter import WorkbenchAdapter
 from agent_engineering_workbench.contracts import RunResult, RunStatus
-from agent_engineering_workbench.dependencies import get_web_research_adapter
+from agent_engineering_workbench.dependencies import (
+    get_knowledge_research_adapter,
+    get_web_research_adapter,
+)
 from agent_engineering_workbench.streaming import (
     StreamEvent,
     StreamEventType,
@@ -36,6 +39,17 @@ router = APIRouter(prefix="/api/research", tags=["research"])
 async def run_web_research(
     request: WebResearchRequest,
     adapter: Annotated[WorkbenchAdapter, Depends(get_web_research_adapter)],
+) -> RunResult:
+    return adapter.run(request.query)
+
+
+@router.post("/knowledge", response_model=RunResult)
+async def run_knowledge_research(
+    request: WebResearchRequest,
+    adapter: Annotated[
+        WorkbenchAdapter,
+        Depends(get_knowledge_research_adapter),
+    ],
 ) -> RunResult:
     return adapter.run(request.query)
 

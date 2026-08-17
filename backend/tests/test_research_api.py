@@ -11,7 +11,10 @@ from agent_engineering_workbench.contracts import (
     SourceReference,
     TraceEvent,
 )
-from agent_engineering_workbench.dependencies import get_web_research_adapter
+from agent_engineering_workbench.dependencies import (
+    get_knowledge_research_adapter,
+    get_web_research_adapter,
+)
 
 
 class FakeAdapter:
@@ -160,3 +163,96 @@ def test_health_endpoint_remains_available() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": "0.1.0"}
+
+
+def test_completed_knowledge_research_returns_expected_json() -> None:
+    adapter = FakeAdapter(
+        RunResult(
+            status=RunStatus.COMPLETED,
+            output="Knowledge research complete",
+            metrics=RunMetrics(
+                iterations=3,
+                tool_calls=2,
+                duration_ms=412.5,
+            ),
+        )
+    )
+    app.dependency_overrides[get_knowledge_research_adapter] = lambda: adapter
+
+    response = TestClient(app).post(
+        "/api/research/knowledge",
+        json={"query": "  indexed knowledge question  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "completed",
+        "output": "Knowledge research complete",
+        "trace": [],
+        "metrics": {
+            "iterations": 3,
+            "tool_calls": 2,
+            "duration_ms": 412.5,
+        },
+        "sources": [],
+        "error": None,
+    }
+    assert adapter.inputs == ["indexed knowledge question"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"query": ""},
+        {"query": "   "},
+        {},
+        {"query": "knowledge question", "unknown": True},
+    ],
+)
+def test_invalid_knowledge_request_returns_422(
+    payload: dict[str, object],
+) -> None:
+    adapter = FakeAdapter(completed_result())
+    app.dependency_overrides[get_knowledge_research_adapter] = lambda: adapter
+
+    response = TestClient(app).post(
+        "/api/research/knowledge",
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert adapter.inputs == []
+
+
+def test_malformed_knowledge_request_returns_standard_validation_error() -> None:
+    adapter = FakeAdapter(completed_result())
+    app.dependency_overrides[get_knowledge_research_adapter] = lambda: adapter
+
+    response = TestClient(app).post(
+        "/api/research/knowledge",
+        content=b'{"query":',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "json_invalid"
+    assert adapter.inputs == []
+
+
+def test_knowledge_adapter_exception_uses_existing_rest_semantics() -> None:
+    expected_error = RuntimeError("knowledge research failed")
+
+    class FailingAdapter:
+        def run(self, user_input: str) -> RunResult:
+            del user_input
+            raise expected_error
+
+    app.dependency_overrides[get_knowledge_research_adapter] = FailingAdapter
+
+    with pytest.raises(RuntimeError) as error:
+        TestClient(app).post(
+            "/api/research/knowledge",
+            json={"query": "knowledge question"},
+        )
+
+    assert error.value is expected_error
