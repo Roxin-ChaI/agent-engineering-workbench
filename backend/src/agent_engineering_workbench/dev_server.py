@@ -11,7 +11,10 @@ from agent_engineering_workbench.contracts import (
     SourceReference,
     TraceEvent,
 )
-from agent_engineering_workbench.dependencies import get_web_research_adapter
+from agent_engineering_workbench.dependencies import (
+    get_knowledge_research_adapter,
+    get_web_research_adapter,
+)
 
 
 class FakeWebResearchAdapter:
@@ -67,12 +70,44 @@ class FakeWebResearchAdapter:
         )
 
 
+class FakeKnowledgeResearchAdapter:
+    """Return PKRA-shaped local data without database or external calls."""
+
+    def run(self, user_input: str) -> RunResult:
+        query = user_input.strip()
+        if not query:
+            raise ValueError("user_input must not be empty")
+
+        return RunResult(
+            status=RunStatus.COMPLETED,
+            output=(
+                "Local Fake Knowledge Research result for "
+                f'"{query}". No external services were called.'
+            ),
+            trace=(),
+            metrics=RunMetrics(
+                iterations=2,
+                tool_calls=1,
+                duration_ms=140.0,
+            ),
+            sources=(),
+            error=None,
+        )
+
+
 def get_fake_web_research_adapter() -> WorkbenchAdapter:
     return FakeWebResearchAdapter()
 
 
+def get_fake_knowledge_research_adapter() -> WorkbenchAdapter:
+    return FakeKnowledgeResearchAdapter()
+
+
 app.dependency_overrides[get_web_research_adapter] = (
     get_fake_web_research_adapter
+)
+app.dependency_overrides[get_knowledge_research_adapter] = (
+    get_fake_knowledge_research_adapter
 )
 
 

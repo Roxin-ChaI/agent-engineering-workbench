@@ -4,13 +4,18 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_engineering_workbench import dev_server
+from agent_engineering_workbench import dependencies, dev_server
 from agent_engineering_workbench.adapter import WorkbenchAdapter
 from agent_engineering_workbench.app import app
 from agent_engineering_workbench.contracts import RunResult, RunStatus
-from agent_engineering_workbench.dependencies import get_web_research_adapter
+from agent_engineering_workbench.dependencies import (
+    get_knowledge_research_adapter,
+    get_web_research_adapter,
+)
 from agent_engineering_workbench.dev_server import (
+    FakeKnowledgeResearchAdapter,
     FakeWebResearchAdapter,
+    get_fake_knowledge_research_adapter,
     get_fake_web_research_adapter,
 )
 
@@ -19,6 +24,9 @@ from agent_engineering_workbench.dev_server import (
 def configure_fake_dependency() -> Iterator[None]:
     app.dependency_overrides[get_web_research_adapter] = (
         get_fake_web_research_adapter
+    )
+    app.dependency_overrides[get_knowledge_research_adapter] = (
+        get_fake_knowledge_research_adapter
     )
     yield
     app.dependency_overrides.clear()
@@ -64,9 +72,12 @@ def test_fake_adapter_satisfies_contract_and_returns_gui_fixture() -> None:
     assert result.error is None
 
 
-def test_dev_app_overrides_production_dependency() -> None:
+def test_dev_app_overrides_production_dependencies() -> None:
     assert app.dependency_overrides[get_web_research_adapter] is (
         get_fake_web_research_adapter
+    )
+    assert app.dependency_overrides[get_knowledge_research_adapter] is (
+        get_fake_knowledge_research_adapter
     )
 
 
@@ -113,6 +124,70 @@ def test_sse_endpoint_replays_fake_result() -> None:
     )
     assert terminal_payload["data"]["status"] == "completed"
     assert "SSE integration check" in terminal_payload["data"]["output"]
+
+
+def test_fake_knowledge_adapter_returns_pkra_shaped_gui_fixture() -> None:
+    result = run_adapter(
+        FakeKnowledgeResearchAdapter(),
+        "  indexed knowledge question  ",
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.output is not None
+    assert "indexed knowledge question" in result.output
+    assert result.metrics.model_dump() == {
+        "iterations": 2,
+        "tool_calls": 1,
+        "duration_ms": 140.0,
+    }
+    assert result.trace == ()
+    assert result.sources == ()
+    assert result.error is None
+
+
+def test_knowledge_rest_endpoint_returns_fake_result_without_real_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "_load_pkra_public_api",
+        lambda: pytest.fail("production PKRA runner must not be created"),
+    )
+
+    response = TestClient(app).post(
+        "/api/research/knowledge",
+        json={"query": "  Knowledge REST integration check  "},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert "Knowledge REST integration check" in payload["output"]
+    assert payload["metrics"] == {
+        "iterations": 2,
+        "tool_calls": 1,
+        "duration_ms": 140.0,
+    }
+    assert payload["trace"] == []
+    assert payload["sources"] == []
+
+
+def test_knowledge_sse_endpoint_returns_started_then_completed() -> None:
+    response = TestClient(app).post(
+        "/api/research/knowledge/stream",
+        json={"query": "Knowledge SSE integration check"},
+    )
+
+    assert response.status_code == 200
+    assert parse_sse_event_types(response.text) == ["started", "completed"]
+    blocks = response.text.strip().split("\n\n")
+    terminal_payload = json.loads(
+        blocks[-1].splitlines()[1].removeprefix("data: ")
+    )
+    assert terminal_payload["data"]["status"] == "completed"
+    assert terminal_payload["data"]["trace"] == []
+    assert terminal_payload["data"]["sources"] == []
+    assert "Knowledge SSE integration check" in terminal_payload["data"]["output"]
 
 
 def test_main_uses_local_uvicorn_settings(monkeypatch: pytest.MonkeyPatch) -> None:
