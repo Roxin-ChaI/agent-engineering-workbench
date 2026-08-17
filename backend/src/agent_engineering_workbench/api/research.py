@@ -60,14 +60,38 @@ async def stream_web_research(
     adapter: Annotated[WorkbenchAdapter, Depends(get_web_research_adapter)],
 ) -> StreamingResponse:
     return StreamingResponse(
-        _stream_web_research(adapter, request.query),
+        _stream_research(
+            adapter,
+            request.query,
+            failure_message="web research execution failed",
+        ),
         media_type="text/event-stream",
     )
 
 
-def _stream_web_research(
+@router.post("/knowledge/stream")
+async def stream_knowledge_research(
+    request: WebResearchRequest,
+    adapter: Annotated[
+        WorkbenchAdapter,
+        Depends(get_knowledge_research_adapter),
+    ],
+) -> StreamingResponse:
+    return StreamingResponse(
+        _stream_research(
+            adapter,
+            request.query,
+            failure_message="knowledge research execution failed",
+        ),
+        media_type="text/event-stream",
+    )
+
+
+def _stream_research(
     adapter: WorkbenchAdapter,
     query: str,
+    *,
+    failure_message: str,
 ) -> Iterator[str]:
     sequence = 0
     yield encode_sse_event(
@@ -86,7 +110,7 @@ def _stream_web_research(
             StreamEvent(
                 sequence=sequence,
                 event_type=StreamEventType.ERROR,
-                data={"message": "web research execution failed"},
+                data={"message": failure_message},
             )
         )
         return
