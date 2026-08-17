@@ -13,13 +13,27 @@ function getApiBaseUrl(): string {
 }
 
 export async function runWebResearch(query: string): Promise<RunResult> {
+  return runResearch("/api/research/web", "Web research", query);
+}
+
+export async function runKnowledgeResearch(
+  query: string,
+): Promise<RunResult> {
+  return runResearch("/api/research/knowledge", "Knowledge research", query);
+}
+
+async function runResearch(
+  path: string,
+  requestName: string,
+  query: string,
+): Promise<RunResult> {
   const normalizedQuery = query.trim();
   if (!normalizedQuery) {
     throw new Error("Research query must not be empty");
   }
 
   const request: WebResearchRequest = { query: normalizedQuery };
-  const response = await fetch(`${getApiBaseUrl()}/api/research/web`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -28,7 +42,7 @@ export async function runWebResearch(query: string): Promise<RunResult> {
   });
 
   if (!response.ok) {
-    throw new Error(`Web research request failed with status ${response.status}`);
+    throw new Error(`${requestName} request failed with status ${response.status}`);
   }
 
   return (await response.json()) as RunResult;
@@ -98,13 +112,39 @@ export async function streamWebResearch(
   query: string,
   onEvent: (event: StreamEvent) => void,
 ): Promise<void> {
+  return streamResearch(
+    "/api/research/web/stream",
+    "Web research",
+    query,
+    onEvent,
+  );
+}
+
+export async function streamKnowledgeResearch(
+  query: string,
+  onEvent: (event: StreamEvent) => void,
+): Promise<void> {
+  return streamResearch(
+    "/api/research/knowledge/stream",
+    "Knowledge research",
+    query,
+    onEvent,
+  );
+}
+
+async function streamResearch(
+  path: string,
+  requestName: string,
+  query: string,
+  onEvent: (event: StreamEvent) => void,
+): Promise<void> {
   const normalizedQuery = query.trim();
   if (!normalizedQuery) {
     throw new Error("Research query must not be empty");
   }
 
   const request: WebResearchRequest = { query: normalizedQuery };
-  const response = await fetch(`${getApiBaseUrl()}/api/research/web/stream`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -113,12 +153,10 @@ export async function streamWebResearch(
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Web research stream failed with status ${response.status}`,
-    );
+    throw new Error(`${requestName} stream failed with status ${response.status}`);
   }
   if (!response.body) {
-    throw new Error("Web research stream response body is unavailable");
+    throw new Error(`${requestName} stream response body is unavailable`);
   }
 
   const reader = response.body.getReader();
