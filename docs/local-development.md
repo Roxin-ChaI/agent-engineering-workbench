@@ -8,13 +8,13 @@
 
 ## Standard Installation
 
-The Backend package metadata pins `web-research-agent` to the GitHub tag `v0.2.0`. A normal Backend installation resolves WRA from that fixed tag:
+The Backend package metadata pins `web-research-agent` to the GitHub tag `v0.2.0` and `production-knowledge-research-agent[e2e]` to `v0.4.0`. The PKRA extra supplies the SentenceTransformer runtime required by its production runner. A normal Backend installation resolves both agents from their fixed Git tags:
 
 ```sh
 .venv/bin/python -m pip install -e './backend[dev]'
 ```
 
-The formal dependency does not use a local absolute path or a floating branch.
+The formal dependencies do not use a local absolute path or a floating branch. A normal Workbench installation does not require a local PKRA repository.
 
 ## Local WRA Development Override
 
@@ -25,6 +25,16 @@ When developing WRA and Workbench together, install the separate local WRA repos
 ```
 
 This is only a local development override: the current environment uses the local WRA source directly. It is not the formal project dependency, and the absolute path must not be added to `pyproject.toml`.
+
+## Local PKRA Development Override
+
+When developing PKRA and Workbench together, the fixed Git dependency may be replaced in the current environment with an editable local checkout:
+
+```sh
+pip install -e '<path-to-pkra>[e2e]'
+```
+
+This optional override makes the current environment use local PKRA source. It is not the formal project dependency and must not be added to `pyproject.toml`.
 
 ## Fake GUI Run
 

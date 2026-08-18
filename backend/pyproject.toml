@@ -13,6 +13,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "web-research-agent @ git+https://github.com/Roxin-ChaI/web-research-agent.git@v0.2.0",
+    "production-knowledge-research-agent[e2e] @ git+https://github.com/Roxin-ChaI/production-knowledge-research-agent.git@v0.4.0",
 ]
 
 [project.optional-dependencies]
