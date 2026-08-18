@@ -2,48 +2,88 @@
 
 ## Overall Architecture
 
-v0.1.0 采用以下固定调用链：
+```text
+Browser
+→ Next.js Frontend
+→ Workbench FastAPI
+→ Adapter boundary
+    ├── WRAAdapter → WRA v0.2.0
+    └── PKRAAdapter → PKRA v0.4.0 ProductionAgentRunner
+                         → PostgreSQL / pgvector
+                         → DeepSeek V4 Flash
+                         → optional DDGS Web Search
+→ RunResult
+→ GUI
+```
 
-`Browser → Frontend → Workbench Backend → Adapter Layer → WRA → Model Abstraction → DeepSeek Adapter → deepseek-v4-flash`
-
-Workbench 只负责 UI、Integration、Presentation 和 API 边界。它不得复制或重新实现 WRA 的 Agent Runtime、LangChain Runtime、Web Search 或模型逻辑。
+Workbench 只负责 UI、Integration、Presentation 与 API 边界。WRA 和 PKRA 保持独立仓库；Workbench 不复制其源码、不重新实现 Runtime，也不通过 CLI/subprocess 调用它们。
 
 ## Frontend
 
-Frontend 使用 Next.js、React、TypeScript 和 Tailwind CSS，提供 Workbench Web UI 基础壳层、Sidebar 与 Web Research 页面，并展示 Web Research 运行结果、Agent Activity / Trace、Metrics 和基础错误状态。
+Frontend 使用 Next.js、React、TypeScript 与 Tailwind CSS。`/research/web` 和 `/research/knowledge` 复用统一 Research Workspace 展示 Answer、Status、Activity、Metrics 与 Sources / Evidence，并分别调用对应的 REST/SSE Client。
 
-## Backend
+Frontend 只理解 Workbench DTO，不依赖 WRA、PKRA、DeepSeek、LangGraph 或数据库类型。
 
-Workbench Backend 使用 Python 3.12 和 FastAPI。它负责 API 边界、请求校验、集成编排、响应标准化和基础错误处理，不承载 WRA 的运行时或模型逻辑。
+## Backend API
 
-Frontend 与 Backend 使用 REST 通信，并通过 `/api/research/web/stream` 定义 SSE 事件传输边界。当前 WRA 公共 `run()` 是同步、非原生流式接口，因此 v0.1.0 先发送 `started`，再完整执行 WRA；WRA 返回后按顺序 replay `RunResult.trace`，最后发送唯一的 `completed`、`stopped` 或 `error` 事件。这不是 native real-time Tool/Agent streaming。若后续 WRA 暴露原生 event/stream API，可在不改变 Frontend SSE contract 的前提下升级为实时事件。Workbench 业务层不得直接依赖 DeepSeek SDK 或具体模型类。
+FastAPI 提供：
 
-## Adapter Layer
+- `POST /api/research/web`
+- `POST /api/research/web/stream`
+- `POST /api/research/knowledge`
+- `POST /api/research/knowledge/stream`
 
-Workbench Adapter Layer 定义稳定、统一的接入契约。WRA Adapter 将 Workbench 请求转换为 WRA 可接受的输入，并将 WRA 输出转换为 Workbench 的标准响应。
+Router 通过 FastAPI Dependency 注入 `WorkbenchAdapter`，只调用 `adapter.run(query)` 并返回 `RunResult`。Router 不创建 Agent、模型、搜索工具或数据库资源。
 
-Adapter 必须隔离 Workbench 与 WRA 的内部数据结构，避免内部实现泄漏到 Frontend 或 Backend，并为后续其他项目接入保留统一扩展点。
+## Adapter Boundary
 
-## Model Abstraction
+`WRAAdapter` 将 WRA 公共 DTO 映射为 `RunResult`，包括 Answer、Trace、Metrics 与可从结构化搜索 Observation 获得的 Sources。
 
-模型接入定义统一的 Model Provider / Model Client 抽象边界。DeepSeek Adapter 是该抽象在 v0.1.0 中唯一的 Provider 实现；默认 Provider 为 DeepSeek，默认模型为 `deepseek-v4-flash`。
+`PKRAAdapter` 只依赖最小 Runner/Result Protocol，将 PKRA 公共 `AgentRunResult` 映射为 Answer 与 Metrics。它使用 `perf_counter()` 测量完整 runner 执行耗时。PKRA 当前公共 contract 不提供可无损映射的 Activity Trace 或结构化 Source/Evidence URL，因此 Adapter 明确返回 `trace = []` 与 `sources = []`，不从 Messages 或自然语言 Answer 猜测数据。
 
-Provider 与模型名称必须通过配置传入，不得散落硬编码。模型实例必须通过统一工厂或依赖注入创建，使 WRA 的模型使用方只依赖抽象契约。后续替换其他模型时，不应修改 Workbench 核心业务逻辑。
+## PKRA Production Composition
 
-v0.1.0 不实现 OpenAI、Anthropic 等其他 Provider，仅保留扩展边界。具体模型调用仍属于 WRA 的模型逻辑，Workbench 不复制或重写该逻辑。
+PKRA 的 production wiring 只使用其公共 API：
 
-## Integrated Projects
+```text
+Workbench Settings
+→ AgentRunnerConfig
+→ create_agent_runner()
+→ ProductionAgentRunner
+→ PKRAAdapter
+```
 
-v0.1.0 只接入 `web-research-agent`。WRA 保持独立，其 Agent Runtime、LangChain Runtime、Web Search 和模型逻辑均由 WRA 自身拥有和实现。
+生命周期由 request-scoped yield dependency 管理：
 
-PKRA、Context Window Compressor、LLM Context Explorer、GitHub Reviewer、Resume Optimizer、Prompt Vault、Prompt Engineering Workbench、多 Agent 和 MCP 均不在 v0.1.0 范围内。用户系统、云部署与持久化运行历史同样不在本版本范围内。
+```text
+create runner
+→ yield PKRAAdapter
+→ adapter.run()
+→ finally runner.close()
+```
 
-## Data Flow
+每个请求拥有独立 Runner 生命周期；成功或异常路径均执行 `close()`。Workbench business logic 不依赖 PKRA private internals，不创建 LangGraph、Repository、Embedding、DDGS 或 Session 私有对象。PKRA 公共 Production Runner 是唯一 production integration boundary。
 
-1. Browser 中的用户操作进入 Frontend。
-2. Frontend 通过 REST 或 SSE 请求 Workbench Backend；SSE 请求先收到 `started`。
-3. Workbench Backend 将标准请求交给 WRA Adapter。
-4. WRA Adapter 转换请求并同步调用 WRA，而不复制其内部运行逻辑。
-5. WRA 通过 Model Abstraction 获取 Model Client；统一工厂或依赖注入根据配置创建 DeepSeek Adapter，并使用 `deepseek-v4-flash`。
-6. WRA 返回后，Adapter Layer 标准化结果、Activity / Trace、Metrics 或错误；SSE 按顺序 replay trace，再发送 terminal event。
-7. Frontend 使用同一 SSE contract 完成展示；当前 replay 语义可在 WRA 支持原生 streaming 后升级为实时事件。
+## Model and Infrastructure Boundaries
+
+默认 Provider 为 DeepSeek，默认模型为 `deepseek-v4-flash`。配置由 Workbench Settings 传入集成项目的公共 factory/composition API，不硬编码 API Key。
+
+PKRA Knowledge Research 需要 Backend 可访问的 PostgreSQL/pgvector 与预索引数据。DDGS Web Search 由 `PKRA_ENABLE_WEB_SEARCH` 控制。Fake dev server 使用 dependency overrides，不创建真实 PKRA Runner，也不访问数据库、DeepSeek 或 DDGS。
+
+## SSE Semantics
+
+Web Research 与 Knowledge Research 使用统一 SSE contract：
+
+```text
+started
+→ synchronous agent execution
+→ replay available RunResult.trace
+→ completed / stopped / error
+```
+
+当前不是原生实时 Token/Tool streaming。WRA 返回后可 replay 已映射 Trace；PKRA 当前 `trace` 为空，因此成功的 Knowledge Research 通常只产生 `started → completed`。未来集成项目若提供原生事件 API，可在不改变 Frontend SSE contract 的前提下升级事件产生方式。
+
+## Version Scope
+
+- v0.1.0：Workbench Shell + WRA。
+- v0.2.0：新增 PKRA Production Runner、Knowledge REST/SSE、Knowledge Frontend Workspace 与 Fake Integration。
