@@ -43,3 +43,36 @@ export interface StreamEvent {
   event_type: StreamEventType;
   data: Record<string, unknown>;
 }
+
+export type ContextMessageRole = "system" | "user" | "assistant" | "tool";
+
+export interface ContextMessage {
+  role: ContextMessageRole;
+  content: string | null;
+}
+
+export type ContextCompressionStrategy =
+  | "no_compression"
+  | "truncation"
+  | "windowed";
+
+export interface ContextCompressionInput {
+  messages: ContextMessage[];
+  target_token_budget: number;
+  max_token_budget: number;
+  strategy: ContextCompressionStrategy;
+}
+
+export interface ContextCompressionResult {
+  original_messages: ContextMessage[];
+  compressed_messages: ContextMessage[];
+  original_token_estimate: number;
+  compressed_token_estimate: number;
+  tokens_saved_estimate: number;
+  compression_ratio: number;
+  strategy: ContextCompressionStrategy;
+  duration_ms: number;
+  compression_applied: boolean;
+  compressed_message_count: number;
+  preserved_message_count: number;
+}

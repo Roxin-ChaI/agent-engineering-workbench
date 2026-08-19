@@ -1,4 +1,6 @@
 import type {
+  ContextCompressionInput,
+  ContextCompressionResult,
   RunResult,
   StreamEvent,
   StreamEventType,
@@ -22,6 +24,16 @@ export async function runKnowledgeResearch(
   return runResearch("/api/research/knowledge", "Knowledge research", query);
 }
 
+export async function compressContext(
+  request: ContextCompressionInput,
+): Promise<ContextCompressionResult> {
+  return postJson(
+    "/api/context/compress",
+    "Context compression",
+    request,
+  );
+}
+
 async function runResearch(
   path: string,
   requestName: string,
@@ -33,19 +45,27 @@ async function runResearch(
   }
 
   const request: WebResearchRequest = { query: normalizedQuery };
+  return postJson(path, requestName, request);
+}
+
+async function postJson<Result>(
+  path: string,
+  requestName: string,
+  body: unknown,
+): Promise<Result> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     throw new Error(`${requestName} request failed with status ${response.status}`);
   }
 
-  return (await response.json()) as RunResult;
+  return (await response.json()) as Result;
 }
 
 const streamEventTypes = new Set<StreamEventType>([
