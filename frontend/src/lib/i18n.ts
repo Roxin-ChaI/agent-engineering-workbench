@@ -28,7 +28,7 @@ export const translations = {
     "dashboard.localDevelopmentDescription":
       "This shell is ready for backend integration in a later step.",
     "dashboard.projectScope": "Project scope",
-    "dashboard.version": "v0.2.0",
+    "dashboard.version": "v0.3.0",
     "dashboard.scopeDescription":
       "Navigation and workspace foundations are in place without live requests.",
     "comingSoon.section": "Workbench / Planned",
@@ -147,7 +147,7 @@ export const translations = {
     "dashboard.localDevelopmentDescription":
       "此基础界面已为后续 Backend 集成做好准备。",
     "dashboard.projectScope": "项目范围",
-    "dashboard.version": "v0.2.0",
+    "dashboard.version": "v0.3.0",
     "dashboard.scopeDescription":
       "导航与工作区基础已就绪，当前不发起实时请求。",
     "comingSoon.section": "Workbench / 规划中",
