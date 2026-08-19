@@ -3,7 +3,10 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_engineering_workbench.adapters.cwc import CWCAdapter
+from agent_engineering_workbench.adapters.cwc import (
+    ContextBudgetError,
+    CWCAdapter,
+)
 from agent_engineering_workbench.app import app
 from agent_engineering_workbench.context_contracts import (
     ContextCompressionInput,
@@ -167,6 +170,57 @@ def test_adapter_exception_uses_existing_rest_error_semantics() -> None:
         )
 
     assert error.value is expected_error
+
+
+def test_context_budget_error_returns_semantic_validation_response() -> None:
+    class BudgetFailingAdapter:
+        def compress(
+            self,
+            compression_input: ContextCompressionInput,
+        ) -> ContextCompressionResult:
+            del compression_input
+            raise ContextBudgetError(
+                "fixed and recent messages require 45 tokens; "
+                "maximum budget is 40"
+            )
+
+    app.dependency_overrides[get_context_compression_adapter] = (
+        BudgetFailingAdapter
+    )
+
+    response = TestClient(app).post(
+        "/api/context/compress",
+        json=valid_payload(),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": (
+            "fixed and recent messages require 45 tokens; "
+            "maximum budget is 40"
+        )
+    }
+
+
+def test_public_cwc_token_budget_error_returns_422() -> None:
+    payload = {
+        "messages": [
+            {
+                "role": "system",
+                "content": "This fixed message cannot fit one token.",
+            }
+        ],
+        "target_token_budget": 1,
+        "max_token_budget": 1,
+        "strategy": "truncation",
+    }
+
+    response = TestClient(app).post("/api/context/compress", json=payload)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "fixed messages require 15 tokens; maximum budget is 1"
+    }
 
 
 def test_response_excludes_research_only_fields() -> None:

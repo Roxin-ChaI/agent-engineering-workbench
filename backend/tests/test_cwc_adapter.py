@@ -3,9 +3,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 import pytest
+from context_window_compressor.exceptions import (  # type: ignore[import-untyped]
+    TokenBudgetError,
+)
 
 import agent_engineering_workbench.adapters.cwc as cwc_adapter_module
 from agent_engineering_workbench.adapters.cwc import (
+    ContextBudgetError,
     CWCAdapter,
     CWCMessageLike,
     CWCProtocolError,
@@ -276,6 +280,34 @@ def test_cwc_exception_is_propagated_unchanged() -> None:
         adapter.compress(make_input())
 
     assert error.value is expected_error
+
+
+def test_token_budget_error_is_translated_to_context_domain_error() -> None:
+    cwc_error = TokenBudgetError(
+        "fixed and recent messages require 45 tokens; maximum budget is 40"
+    )
+
+    class FailingCompressor:
+        def compress(
+            self,
+            messages: Sequence[CWCMessageLike],
+            current_query: str | None = None,
+        ) -> CWCResultLike:
+            del messages, current_query
+            raise cwc_error
+
+    def create_failing_compressor(
+        compression_input: ContextCompressionInput,
+    ) -> FailingCompressor:
+        del compression_input
+        return FailingCompressor()
+
+    adapter = CWCAdapter(compressor_factory=create_failing_compressor)
+
+    with pytest.raises(ContextBudgetError, match="require 45 tokens") as error:
+        adapter.compress(make_input())
+
+    assert error.value.__cause__ is cwc_error
 
 
 def test_adapter_does_not_modify_caller_input_or_expose_cwc_objects() -> None:

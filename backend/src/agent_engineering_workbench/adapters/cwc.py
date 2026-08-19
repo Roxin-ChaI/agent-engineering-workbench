@@ -11,6 +11,9 @@ from context_window_compressor import (  # type: ignore[import-untyped]
     TruncationStrategy,
     WindowedCompressionStrategy,
 )
+from context_window_compressor.exceptions import (  # type: ignore[import-untyped]
+    TokenBudgetError,
+)
 
 from agent_engineering_workbench.context_contracts import (
     ContextCompressionInput,
@@ -22,6 +25,10 @@ from agent_engineering_workbench.context_contracts import (
 
 class CWCProtocolError(RuntimeError):
     """Raised when CWC returns data outside the Workbench boundary."""
+
+
+class ContextBudgetError(ValueError):
+    """Raised when requested context budgets cannot be satisfied."""
 
 
 class CWCMessageLike(Protocol):
@@ -133,10 +140,13 @@ class CWCAdapter:
             self._message_factory(role=message.role, content=message.content)
             for message in compression_input.messages
         )
-        compressor = self._compressor_factory(compression_input)
-        # Context Lab needs one direct history transformation, so it uses
-        # CWC's public compress() rather than the Agent request helper.
-        cwc_result = compressor.compress(cwc_messages)
+        try:
+            compressor = self._compressor_factory(compression_input)
+            # Context Lab needs one direct history transformation, so it uses
+            # CWC's public compress() rather than the Agent request helper.
+            cwc_result = compressor.compress(cwc_messages)
+        except TokenBudgetError as exc:
+            raise ContextBudgetError(str(exc)) from exc
         strategy = self._map_strategy(cwc_result.metrics.strategy_name)
         if strategy is not compression_input.strategy:
             raise CWCProtocolError(

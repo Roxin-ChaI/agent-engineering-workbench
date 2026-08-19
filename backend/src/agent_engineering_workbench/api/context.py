@@ -1,8 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from agent_engineering_workbench.adapters.cwc import CWCAdapter
+from agent_engineering_workbench.adapters.cwc import (
+    ContextBudgetError,
+    CWCAdapter,
+)
 from agent_engineering_workbench.context_contracts import (
     ContextCompressionInput,
     ContextCompressionResult,
@@ -22,4 +25,10 @@ async def compress_context(
         Depends(get_context_compression_adapter),
     ],
 ) -> ContextCompressionResult:
-    return adapter.compress(request)
+    try:
+        return adapter.compress(request)
+    except ContextBudgetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
