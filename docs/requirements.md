@@ -2,61 +2,93 @@
 
 ## Project Goal
 
-`Agent Engineering Workbench` 通过统一 Web UI、API 与 Adapter contract 集成相互独立的 AI Agent 工程项目。
+`Agent Engineering Workbench` provides a unified Web UI, API, and adapter boundary for independently maintained AI engineering projects.
 
-版本范围：
+Version history:
 
-- v0.1.0：Workbench Shell 与 WRA Web Research 集成。
-- v0.2.0：在保留 WRA 的基础上，新增 PKRA Knowledge Research 集成。
+- v0.1.0: Workbench Shell and WRA Web Research integration.
+- v0.2.0: PKRA Knowledge Research integration while retaining WRA.
+- v0.3.0: Context Lab and CWC integration while retaining both Research workspaces.
 
-## v0.2.0 Scope
+## v0.3.0 Scope
 
 ### Backend
 
-- Python 3.12 与 FastAPI Backend。
-- Workbench 自有 `RunResult`、Metrics、Trace 与 Sources contract。
-- WRAAdapter 与 PKRAAdapter。
-- 通过 PKRA 公共 Production Runner API 完成 production wiring。
-- request-scoped PKRA runner 生命周期与可靠的 `close()` 清理。
-- `POST /api/research/web` 与 `POST /api/research/web/stream`。
-- `POST /api/research/knowledge` 与 `POST /api/research/knowledge/stream`。
-- Web Research 与 Knowledge Research 的 Fake 本地联调入口。
-- 基础请求校验、安全错误响应和本地 CORS 配置。
+- Python 3.12 and FastAPI Backend.
+- Workbench-owned immutable Context request/result DTOs, separate from Research `RunResult`.
+- `CWCAdapter` using CWC v0.1.0 public APIs.
+- Formal CWC dependency fixed to Git tag `v0.1.0`.
+- `POST /api/context/compress` with no Context SSE endpoint.
+- Translation of public CWC `TokenBudgetError` into a Workbench Context domain error and HTTP 422.
+- Deterministic Fake Context dependency override for local GUI integration.
+- Existing WRA and PKRA REST/SSE behavior remains available.
 
 ### Frontend
 
-- Next.js、React、TypeScript 与 Tailwind CSS Workbench Shell。
-- `/research/web` 与 `/research/knowledge` 工作区及导航。
-- Web 与 Knowledge Research REST/SSE Client。
-- Answer、Status、Metrics、Activity 与 Sources / Evidence 展示区域。
-- PKRA 空 Trace 和空 Sources 状态的明确展示。
-- English / 中文与 Dark / Light 偏好。
+- Context TypeScript request/result contract independent of Python and CWC types.
+- `compressContext()` REST client.
+- `/context` Context Lab route and navigation.
+- Editable message-history JSON.
+- `no_compression`, `truncation`, and `windowed` strategy selection.
+- Distinct target and maximum token-budget controls.
+- Original / Compressed message comparison.
+- Estimated original, compressed, and saved token Metrics; compression ratio, strategy, and duration.
+- English / Chinese text and Dark / Light theme compatibility.
+- Client-side invalid JSON handling, loading protection, and a stable request error state.
 
 ### Integrated Projects
 
-- `web-research-agent` v0.2.0。
-- `production-knowledge-research-agent` v0.4.0。
+- `web-research-agent` v0.2.0.
+- `production-knowledge-research-agent` v0.4.0.
+- `context-window-compressor` v0.1.0.
 
-两个项目均保持独立仓库。Workbench 仅通过公共 Python API 与 Adapter 边界集成，不复制源码、不导入 PKRA 私有 Runtime，也不通过 subprocess 调用 CLI。
+All projects remain independent repositories. Workbench uses public Python APIs and adapter boundaries; it does not copy source or invoke project CLIs through subprocesses.
 
-## Contract and Streaming Boundaries
+## Context Contract and Behavior
 
-所有前端 Research 页面只依赖 Workbench `RunResult` contract。当前 PKRA 公共结果可以映射 Answer、Iterations、Tool Calls 与 Duration，但没有可无损映射的结构化 Activity Trace 或 Source/Evidence URL，因此 Knowledge Research 当前返回 `trace = []` 与 `sources = []`。这属于 v0.2.0 已知限制，不是运行失败。
+The request contains ordered messages, `target_token_budget`, `max_token_budget`, and one supported strategy. The result contains original/compressed messages, estimated token counts, estimated tokens saved, compression ratio, strategy, duration, `compression_applied`, compressed message count, and preserved message count.
 
-WRA 与 PKRA 当前均通过同步运行入口执行。SSE 语义为：发送 `started`，同步执行 Agent，完成后 replay 可用 Trace，最后发送 `completed`、`stopped` 或 `error`。当前不提供原生实时 Token/Tool streaming。
+Token counts are estimates, not exact provider-tokenizer counts. CWC runs locally and offline without an API key, database, model provider, or network call. `CWCAdapter` invokes public CWC `compress()` and translates the public result without recomputing Metrics.
+
+In CWC v0.1.0, `compression_applied=true` means the threshold was reached and the compression pipeline executed; it does not guarantee that output messages or estimated token counts changed.
+
+If protected fixed/recent messages cannot fit the maximum budget, the boundary is:
+
+```text
+CWC TokenBudgetError
+→ Workbench Context domain error
+→ HTTP 422
+```
+
+Unexpected exceptions are not converted into client validation failures.
+
+## Research Contract and Streaming Boundaries
+
+Research Frontends depend only on the Workbench `RunResult` contract. PKRA currently maps Answer, Iterations, Tool Calls, and Duration but has no lossless structured Activity Trace or Source/Evidence URL contract; successful Knowledge runs therefore return `trace = []` and `sources = []`.
+
+WRA and PKRA use synchronous run boundaries. Research SSE emits `started`, executes the agent, replays available Trace afterward, then emits `completed`, `stopped`, or `error`. It is not native real-time Token/Tool streaming.
+
+## Validation Baseline
+
+- 168 Backend tests pass.
+- Ruff, mypy strict, and pip check pass.
+- Frontend ESLint and TypeScript checks pass.
+- Fake Context GUI covers all three strategies, invalid JSON blocking before POST, bilingual UI, themes, and a clean browser console.
+- Real Context REST/GUI covers no-op `45 → 45`, actual `114 → 69` truncation, TokenBudgetError → HTTP 422, and a clean browser console.
+- The final v0.3.0 Next.js production build remains a manual release verification.
 
 ## Non Goals
 
-- 为 PKRA 伪造 Activity Trace 或从 Answer 文本解析 Sources/Evidence。
-- 原生实时 Token/Tool streaming。
-- 复制或重新实现 WRA/PKRA Agent Runtime、检索、Web Search 或模型逻辑。
-- 通过 Workbench 调用 WRA/PKRA CLI 或 subprocess。
-- Context Window Compressor、LLM Context Explorer、GitHub Reviewer、Resume Optimizer、Prompt Vault 与 Prompt Engineering Workbench 的真实集成。
-- 用户系统、云部署、持久化运行历史、多 Agent 与 MCP。
-- OpenAI、Anthropic 等其他 Model Provider 的具体实现。
+- Context persistence or Context SSE.
+- File upload or per-message token counts.
+- Exact provider-tokenizer integration.
+- Exposing private CWC partition/change reasons.
+- LLM-based Context summarization or external API calls.
+- Fabricating PKRA Activity Trace or parsing Sources/Evidence from Answer text.
+- Native real-time Research Token/Tool streaming.
+- Copying or reimplementing WRA, PKRA, or CWC internals.
+- User accounts, cloud deployment, persisted Research history, multi-agent orchestration, or MCP integration.
 
-## Architecture Constraints
+## Known UX Limitation
 
-Workbench 只负责 UI、Integration、Presentation 与 API 边界。Adapter 必须隔离 Workbench 与集成项目的内部数据结构，并为后续项目提供统一扩展点。
-
-默认 Provider 为 DeepSeek，默认模型为 `deepseek-v4-flash`。Provider 与模型名称通过配置传入，模型创建通过工厂或依赖注入完成。Workbench 自有模型抽象不强行替换 WRA 或 PKRA 已验证的内部模型层。
+The Context API returns useful budget detail with HTTP 422, but v0.3.0 Frontend displays only `Unable to compress this context.` This is a documented LOW finding, not a release blocker.

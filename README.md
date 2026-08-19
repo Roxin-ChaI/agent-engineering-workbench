@@ -2,27 +2,28 @@
 
 # Agent Engineering Workbench
 
-A modular Web workbench for integrating, running, and inspecting independent AI Agent engineering projects through a unified interface.
+A modular Web workbench for integrating, running, and inspecting independent AI engineering projects through a unified interface.
 
-## v0.2.0
+## v0.3.0
 
-v0.2.0 provides two production research workspaces:
+v0.3.0 provides three workspaces:
 
 - Web Research uses [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent) (WRA) v0.2.0.
 - Knowledge Research uses [`production-knowledge-research-agent`](https://github.com/Roxin-ChaI/production-knowledge-research-agent) (PKRA) v0.4.0.
+- Context Lab uses [`context-window-compressor`](https://github.com/Roxin-ChaI/context-window-compressor) (CWC) v0.1.0.
 
-Both agents remain independent repositories. The Workbench integrates their public Python APIs through adapters; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA integration, while v0.2.0 adds PKRA Knowledge Research.
+All three projects remain independent repositories. The Workbench integrates their public Python APIs through adapter boundaries; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA, v0.2.0 added PKRA Knowledge Research, and v0.3.0 adds Context Lab.
 
 ## Features
 
 - Web Research and Knowledge Research workspaces
-- Final Answer and execution status display
-- Iteration, tool-call, and execution-duration Metrics
-- WRA Agent Activity / Trace replay and structured Sources
-- Graceful empty Activity and Sources / Evidence states for PKRA
+- Final Answer, execution status, Metrics, Activity, and Sources presentation
+- Context Lab message-history JSON editor and Before / After comparison
+- Context compression strategy and target / maximum token-budget controls
+- Estimated token reduction, compression ratio, strategy, and duration Metrics
 - English and Chinese UI
 - Dark and Light themes with persisted preferences
-- Fake local integration mode and production agent integrations
+- Fake local integration mode and production integrations
 
 ## Routes and API
 
@@ -31,14 +32,18 @@ Frontend routes:
 - `/`
 - `/research/web`
 - `/research/knowledge`
-- `/context`, `/prompts`, `/resume`, and `/github`
+- `/context`
+- `/prompts`, `/resume`, and `/github`
 
-Backend research endpoints:
+Backend endpoints:
 
 - `POST /api/research/web`
 - `POST /api/research/web/stream`
 - `POST /api/research/knowledge`
 - `POST /api/research/knowledge/stream`
+- `POST /api/context/compress`
+
+The two Research workspaces offer REST and SSE boundaries. Context Lab uses REST only; it does not expose a Context SSE endpoint.
 
 ## Architecture
 
@@ -46,39 +51,53 @@ Backend research endpoints:
 Browser
   → Next.js Workbench
   → FastAPI
-      → WRAAdapter
-          → WRA v0.2.0
-      → PKRAAdapter
-          → PKRA v0.4.0 ProductionAgentRunner
-              → PostgreSQL / pgvector
-              → DeepSeek V4 Flash
-              → optional DDGS Web Search
-  → RunResult
+      → WRAAdapter → WRA v0.2.0
+      → PKRAAdapter → PKRA v0.4.0 ProductionAgentRunner
+          → PostgreSQL / pgvector
+          → DeepSeek V4 Flash
+          → optional DDGS Web Search
+      → CWCAdapter → CWC v0.1.0 public compress()
+  → Workbench-owned result contracts
   → GUI
 ```
 
-`WRAAdapter` and `PKRAAdapter` map public agent results into the Workbench-owned `RunResult` contract. The adapter boundary keeps Workbench business logic independent of agent internals. PKRA is composed through its public Production Runner API; the Workbench does not import PKRA private runtime modules.
+Research adapters map public agent results into the Workbench-owned `RunResult` contract. Context Lab uses separate Context request/result DTOs; `CWCAdapter` translates them to and from CWC's public API. The Workbench does not import private project internals.
 
 ## Dependencies
 
 - WRA is pinned to the stable Git tag `v0.2.0`.
 - PKRA with its production embedding extra is pinned to the stable Git tag `v0.4.0`.
-- A normal Workbench installation does not require a local PKRA checkout. Editable installs are optional development overrides only.
+- CWC is pinned to the stable Git tag `v0.1.0`.
+- Normal installation does not require local WRA, PKRA, or CWC checkouts. Editable installs are optional development overrides only.
 
-## Knowledge Research Behavior
+## Context Lab
 
-Users submit indexed-knowledge questions through `/research/knowledge`. PKRA returns the Answer and Metrics through the standard `RunResult` contract. Its current public result contract does not expose a lossless activity trace or structured source/evidence URLs for Workbench mapping, so successful runs currently contain:
+Context Lab accepts:
+
+- a message-history JSON array;
+- `no_compression`, `truncation`, or `windowed`;
+- a target token budget; and
+- a maximum token budget.
+
+It displays Original Messages, Compressed Messages, Estimated Original Tokens, Estimated Compressed Tokens, Estimated Tokens Saved, Compression Ratio, Strategy, and Duration. The API contract also reports whether the pipeline ran and how many input messages were compressed or preserved.
+
+Token values are deterministic estimates from CWC's offline counter, not exact provider-tokenizer counts. CWC runs locally, requires no API key, and has no network dependency. The adapter calls CWC's public `compress()` API.
+
+In CWC v0.1.0, `compression_applied=true` means the compression threshold was reached and the compression pipeline executed. It does not guarantee that the final messages or estimated token count changed.
+
+An unsatisfiable hard budget—for example, protected fixed/recent messages exceeding the maximum—follows this boundary:
 
 ```text
-trace = []
-sources = []
+CWC TokenBudgetError
+→ Workbench Context domain error
+→ HTTP 422
 ```
 
-These empty fields are known contract limitations, not execution failures.
+## Research Behavior and SSE Semantics
 
-## SSE Semantics
+PKRA returns Answer and Metrics through `RunResult`, but its current public result has no lossless activity trace or structured source/evidence URLs. Successful Knowledge runs therefore currently contain `trace = []` and `sources = []`; these are known contract limitations, not execution failures.
 
-Both research streams use the same post-run replay protocol:
+Both Research streams use the same post-run replay protocol:
 
 ```text
 started
@@ -87,7 +106,7 @@ started
 → completed / stopped / error
 ```
 
-Neither endpoint provides native real-time token/tool streaming. Because PKRA currently supplies no mapped trace, a typical successful Knowledge Research stream is `started → completed`.
+Neither endpoint provides native real-time token/tool streaming.
 
 ## Tech Stack
 
@@ -97,23 +116,29 @@ Neither endpoint provides native real-time token/tool streaming. Because PKRA cu
 - PostgreSQL / pgvector and optional DDGS for PKRA
 - web-research-agent v0.2.0
 - production-knowledge-research-agent v0.4.0
+- context-window-compressor v0.1.0
 
 ## Quality Baseline
 
-- Backend: 126 tests passed
+- Backend: 168 tests passed
 - Ruff: PASS
 - mypy strict: PASS
 - pip check: PASS
 - Frontend ESLint: PASS
 - TypeScript: PASS
+- Final v0.3.0 Next.js production build: pending manual release verification
 
-Real validation completed for Fake Knowledge GUI E2E, PKRA Production Runner knowledge-only and web-enabled flows, Workbench Real Knowledge REST, and Workbench Real Knowledge GUI. Execution duration varies per run and is reported as a measured metric rather than a fixed baseline.
+Fake GUI validation covers all three strategies, invalid JSON blocking before POST, bilingual/theme behavior, and a clean browser console. Real REST/GUI validation covers no-op compression (`45 → 45`, zero saved, `compression_applied=false`, HTTP 200), truncation (`114 → 69`, 45 estimated tokens saved, approximately 60.5% ratio, `compressed_message_count=1`, HTTP 200), TokenBudgetError → HTTP 422, and a clean browser console. Duration is measured per run and is not a fixed benchmark.
 
 ## Known Limitations
 
-- PKRA structured sources/evidence are not currently mapped into Workbench.
-- PKRA activity trace is not currently mapped into Workbench.
-- SSE replays available events after synchronous execution; native real-time token/tool streaming is not yet available.
+- Context token values are estimates, not exact tokenizer counts.
+- `compression_applied=true` indicates pipeline execution, not necessarily changed output.
+- Context HTTP 422 responses contain useful budget detail, but the current Frontend displays only `Unable to compress this context.`
+- CWC private partition/change reasons are not exposed to Workbench.
+- Context Lab currently has no persistence or SSE.
+- PKRA structured Sources/Evidence and Activity Trace are not currently mapped.
+- Research SSE replays available events after synchronous execution; native real-time streaming is unavailable.
 
 ## Documentation
 

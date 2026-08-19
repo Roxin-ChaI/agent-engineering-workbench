@@ -8,42 +8,46 @@ Browser
 → Workbench FastAPI
 → Adapter boundary
     ├── WRAAdapter → WRA v0.2.0
-    └── PKRAAdapter → PKRA v0.4.0 ProductionAgentRunner
-                         → PostgreSQL / pgvector
-                         → DeepSeek V4 Flash
-                         → optional DDGS Web Search
-→ RunResult
+    ├── PKRAAdapter → PKRA v0.4.0 ProductionAgentRunner
+    │                    → PostgreSQL / pgvector
+    │                    → DeepSeek V4 Flash
+    │                    → optional DDGS Web Search
+    └── CWCAdapter → CWC v0.1.0 public compress()
+→ Workbench-owned result contracts
 → GUI
 ```
 
-Workbench 只负责 UI、Integration、Presentation 与 API 边界。WRA 和 PKRA 保持独立仓库；Workbench 不复制其源码、不重新实现 Runtime，也不通过 CLI/subprocess 调用它们。
+Workbench owns UI, integration, presentation, and API boundaries. WRA, PKRA, and CWC remain independent repositories; Workbench neither copies their source nor invokes their CLIs through subprocesses.
 
 ## Frontend
 
-Frontend 使用 Next.js、React、TypeScript 与 Tailwind CSS。`/research/web` 和 `/research/knowledge` 复用统一 Research Workspace 展示 Answer、Status、Activity、Metrics 与 Sources / Evidence，并分别调用对应的 REST/SSE Client。
+Next.js, React, TypeScript, and Tailwind CSS provide three workspaces:
 
-Frontend 只理解 Workbench DTO，不依赖 WRA、PKRA、DeepSeek、LangGraph 或数据库类型。
+- `/research/web`
+- `/research/knowledge`
+- `/context`
+
+Research pages share `RunResult` presentation and REST/SSE clients. Context Lab instead uses dedicated TypeScript Context DTOs and `compressContext()`. The Frontend never imports Python, CWC, WRA, PKRA, model, or database types.
 
 ## Backend API
 
-FastAPI 提供：
+FastAPI provides:
 
 - `POST /api/research/web`
 - `POST /api/research/web/stream`
 - `POST /api/research/knowledge`
 - `POST /api/research/knowledge/stream`
+- `POST /api/context/compress`
 
-Router 通过 FastAPI Dependency 注入 `WorkbenchAdapter`，只调用 `adapter.run(query)` 并返回 `RunResult`。Router 不创建 Agent、模型、搜索工具或数据库资源。
+Routers receive adapters through FastAPI dependencies. They do not create model, search, database, or compression internals. Context uses REST only and has no SSE endpoint.
 
-## Adapter Boundary
+## Research Adapter Boundary
 
-`WRAAdapter` 将 WRA 公共 DTO 映射为 `RunResult`，包括 Answer、Trace、Metrics 与可从结构化搜索 Observation 获得的 Sources。
+`WRAAdapter` maps WRA public DTOs into `RunResult`, including Answer, Trace, Metrics, and Sources available from structured search observations.
 
-`PKRAAdapter` 只依赖最小 Runner/Result Protocol，将 PKRA 公共 `AgentRunResult` 映射为 Answer 与 Metrics。它使用 `perf_counter()` 测量完整 runner 执行耗时。PKRA 当前公共 contract 不提供可无损映射的 Activity Trace 或结构化 Source/Evidence URL，因此 Adapter 明确返回 `trace = []` 与 `sources = []`，不从 Messages 或自然语言 Answer 猜测数据。
+`PKRAAdapter` depends on a minimal Runner/Result Protocol and maps PKRA public results into Answer and Metrics. It measures complete runner duration with `perf_counter()`. PKRA currently provides no lossless Activity Trace or structured Source/Evidence URL boundary, so the Adapter returns `trace = []` and `sources = []`.
 
-## PKRA Production Composition
-
-PKRA 的 production wiring 只使用其公共 API：
+PKRA production composition uses only its public API:
 
 ```text
 Workbench Settings
@@ -53,26 +57,45 @@ Workbench Settings
 → PKRAAdapter
 ```
 
-生命周期由 request-scoped yield dependency 管理：
+The request-scoped yield dependency always closes the runner.
+
+## Context Lab Boundary
 
 ```text
-create runner
-→ yield PKRAAdapter
-→ adapter.run()
-→ finally runner.close()
+Browser
+→ /context
+→ compressContext()
+→ POST /api/context/compress
+→ Context API
+→ CWCAdapter
+→ CWC v0.1.0 public compress()
+→ Workbench Context Result
+→ UI
 ```
 
-每个请求拥有独立 Runner 生命周期；成功或异常路径均执行 `close()`。Workbench business logic 不依赖 PKRA private internals，不创建 LangGraph、Repository、Embedding、DDGS 或 Session 私有对象。PKRA 公共 Production Runner 是唯一 production integration boundary。
+Context request/result DTOs are Workbench-owned and do not reuse Research `RunResult`. `CWCAdapter` creates public CWC messages, configuration, token counter, and the selected public strategy; it invokes public `compress()` once and directly translates messages and Metrics. It does not expose CWC private partitions or implementation state.
 
-## Model and Infrastructure Boundaries
+CWC's token counter is deterministic and offline. Reported token values are estimates rather than exact provider-tokenizer counts. In CWC v0.1.0, `compression_applied=true` records that the threshold-triggered compression pipeline ran; it does not assert that messages or estimated tokens changed.
 
-默认 Provider 为 DeepSeek，默认模型为 `deepseek-v4-flash`。配置由 Workbench Settings 传入集成项目的公共 factory/composition API，不硬编码 API Key。
+## Context Error Boundary
 
-PKRA Knowledge Research 需要 Backend 可访问的 PostgreSQL/pgvector 与预索引数据。DDGS Web Search 由 `PKRA_ENABLE_WEB_SEARCH` 控制。Fake dev server 使用 dependency overrides，不创建真实 PKRA Runner，也不访问数据库、DeepSeek 或 DDGS。
+```text
+CWC TokenBudgetError
+→ Workbench ContextBudgetError
+→ HTTP 422 with budget detail
+```
 
-## SSE Semantics
+Only the known public budget failure is translated. Unexpected CWC/Adapter exceptions retain existing server-error semantics.
 
-Web Research 与 Knowledge Research 使用统一 SSE contract：
+## Production and Fake Isolation
+
+`agent_engineering_workbench.app:app` resolves the real `CWCAdapter`. The local `agent_engineering_workbench.dev_server:app` module installs a deterministic Fake Context dependency override for GUI testing. The Fake path does not call CWC and does not affect a production app that is launched directly.
+
+Fake Context Metrics are test fixtures, not benchmarks: `no_compression` reports `120 → 120`; `truncation` and `windowed` report `120 → 48`; duration is fixed at 3 ms.
+
+## Research SSE Semantics
+
+Web and Knowledge Research share this post-run replay contract:
 
 ```text
 started
@@ -81,9 +104,18 @@ started
 → completed / stopped / error
 ```
 
-当前不是原生实时 Token/Tool streaming。WRA 返回后可 replay 已映射 Trace；PKRA 当前 `trace` 为空，因此成功的 Knowledge Research 通常只产生 `started → completed`。未来集成项目若提供原生事件 API，可在不改变 Frontend SSE contract 的前提下升级事件产生方式。
+This is not native real-time Token/Tool streaming. Context Lab does not use this contract.
 
 ## Version Scope
 
-- v0.1.0：Workbench Shell + WRA。
-- v0.2.0：新增 PKRA Production Runner、Knowledge REST/SSE、Knowledge Frontend Workspace 与 Fake Integration。
+- v0.1.0: Workbench Shell and WRA.
+- v0.2.0: PKRA Production Runner, Knowledge REST/SSE, Knowledge Frontend Workspace, and Fake Integration.
+- v0.3.0: CWCAdapter, Context REST API, Context Lab, Fake Context Integration, and HTTP 422 budget boundary.
+
+## Known Limitations
+
+- Context token values are estimates.
+- Pipeline execution does not guarantee changed Context output.
+- Frontend presents a generic message for detailed HTTP 422 budget failures.
+- CWC private partition/change reasons are intentionally outside the Workbench contract.
+- Context Lab has no persistence or SSE.

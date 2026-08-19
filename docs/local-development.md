@@ -5,53 +5,94 @@
 - Python 3.12
 - Node.js and npm
 - The Workbench `.venv`
-- PostgreSQL with pgvector and pre-indexed PKRA data for real Knowledge Research
+- PostgreSQL with pgvector and pre-indexed PKRA data only for real Knowledge Research
+
+Context Lab itself requires no API key, database, Redis, DDGS, model provider, or external network call.
 
 ## Standard Installation
 
-The Backend package metadata pins both integrations to stable Git tags:
+Backend package metadata pins all integrations to stable Git tags:
 
 - `web-research-agent` v0.2.0
 - `production-knowledge-research-agent[e2e]` v0.4.0
+- `context-window-compressor` v0.1.0
 
-The PKRA extra supplies the SentenceTransformer runtime required by its Production Runner. Install the Backend and development tools from the project root:
+Install Backend and development tools from the project root:
 
 ```sh
 .venv/bin/python -m pip install -e './backend[dev]'
 ```
 
-Normal installation does not require local WRA or PKRA checkouts. Formal dependencies use fixed Git tags, not local paths or floating branches.
+Normal installation does not require local WRA, PKRA, or CWC checkouts. Formal dependencies use fixed Git tags, not local paths or floating branches.
 
 ## Optional Editable Overrides
 
-Use editable overrides only when developing Workbench and an agent repository together:
+Use editable overrides only when developing Workbench and an integrated project together:
 
 ```sh
 .venv/bin/python -m pip install -e '<path-to-wra>'
 .venv/bin/python -m pip install -e '<path-to-pkra>[e2e]'
+.venv/bin/python -m pip install -e '<path-to-cwc>'
 ```
 
 These commands make the current environment use local source. They are not formal dependency declarations and must not be added to `pyproject.toml`.
 
 ## Fake GUI Run
 
-Start the local fake Backend from the project root:
+From the Backend directory, start the development app explicitly:
 
 ```sh
-.venv/bin/python -m agent_engineering_workbench.dev_server
+cd backend
+../.venv/bin/python -m uvicorn \
+  agent_engineering_workbench.dev_server:app \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
 Start the Frontend in another shell:
 
 ```sh
-cd frontend && npm run dev
+cd frontend
+npm run dev
 ```
 
-The dev server overrides both research dependencies with deterministic fake adapters. It does not create WRA/PKRA production objects and does not require PostgreSQL, an API key, DeepSeek, or DDGS.
+Open `http://localhost:3000/context`.
 
-## Real Application
+The dev server provides deterministic Fake Web, Knowledge, and Context adapters. Fake Context results are suitable for Before / After UI checks without executing CWC:
 
-Set configuration in the shell; never commit secrets:
+- `no_compression`: `120 → 120`
+- `truncation`: `120 → 48`
+- `windowed`: `120 → 48`
+- duration: 3 ms
+
+These values are fixtures, not CWC performance or compression benchmarks.
+
+## Real Context Lab
+
+Start the production app directly rather than importing `dev_server`:
+
+```sh
+cd backend
+../.venv/bin/python -m uvicorn \
+  agent_engineering_workbench.app:app \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Then start the Frontend and open `http://localhost:3000/context`:
+
+```sh
+cd frontend
+npm run dev
+```
+
+This path uses the real `CWCAdapter` and CWC v0.1.0 public `compress()` API. It remains local/offline and does not require an API key, PostgreSQL, Redis, DDGS, or a model provider. Token values are estimates, not exact tokenizer counts.
+
+An impossible maximum budget returns HTTP 422. The response includes budget detail, while the current Frontend displays the stable generic message `Unable to compress this context.`
+
+## Real Research Application
+
+Set Research configuration in the shell; never commit secrets:
 
 ```sh
 export MODEL_PROVIDER=deepseek
@@ -59,24 +100,24 @@ export MODEL_NAME=deepseek-v4-flash
 export DEEPSEEK_API_KEY='<your-deepseek-api-key>'
 export PKRA_DATABASE_URL='postgresql+psycopg://<user>:<password>@<host>:<port>/<database>'
 export PKRA_ENABLE_WEB_SEARCH=true
-.venv/bin/uvicorn agent_engineering_workbench.app:app --host 127.0.0.1 --port 8000
+cd backend
+../.venv/bin/python -m uvicorn \
+  agent_engineering_workbench.app:app \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-`PKRA_DATABASE_URL` must point to PostgreSQL/pgvector reachable from the Workbench Backend and containing pre-indexed data. Set `PKRA_ENABLE_WEB_SEARCH=false` for knowledge-only research or `true` to enable PKRA's DDGS Web Search.
+`PKRA_DATABASE_URL` must point to reachable PostgreSQL/pgvector with pre-indexed data. Set `PKRA_ENABLE_WEB_SEARCH=false` for knowledge-only research or `true` for optional DDGS Web Search.
 
-Start the Frontend separately:
-
-```sh
-cd frontend && npm run dev
-```
-
-Open either workspace:
+Open either Research workspace after starting the Frontend:
 
 - `http://localhost:3000/research/web`
 - `http://localhost:3000/research/knowledge`
 
-Use `agent_engineering_workbench.app:app` for real WRA/PKRA execution. Do not use `dev_server` for a real E2E because its dependency overrides intentionally return fake results. Real execution may call DeepSeek and DDGS and may incur API costs.
+Real Research may call DeepSeek and DDGS and may incur API costs. Research SSE uses post-run Trace replay rather than native real-time Token/Tool streaming.
 
-## Current PKRA Contract Limits
+## Validation Notes
 
-PKRA currently returns Answer and Metrics to Workbench, but no mapped Activity Trace or structured Sources/Evidence. Empty `trace` and `sources` are expected contract limitations. Knowledge SSE uses post-run replay semantics and is not native real-time Token/Tool streaming.
+The Context Lab Fake GUI, real no-op compression, real `114 → 69` truncation, and TokenBudgetError → HTTP 422 paths have been manually verified. Execution duration varies per run and is not a fixed baseline.
+
+The final v0.3.0 Next.js production build remains a manual release verification.
