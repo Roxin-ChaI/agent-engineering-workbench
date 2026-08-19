@@ -10,6 +10,7 @@ from web_research_agent.tools import (  # type: ignore[import-untyped]
 )
 
 from agent_engineering_workbench.adapter import WorkbenchAdapter
+from agent_engineering_workbench.adapters.cwc import CWCAdapter
 from agent_engineering_workbench.adapters.pkra import (
     PKRAAdapter,
     PKRARunner,
@@ -41,7 +42,7 @@ def _load_pkra_public_api() -> tuple[
     _AgentRunnerConfigFactory,
     _CreateAgentRunner,
 ]:
-    from research_agent import (  # type: ignore[import-not-found]
+    from research_agent import (  # type: ignore[import-not-found, import-untyped]
         AgentRunnerConfig,
         create_agent_runner,
     )
@@ -85,6 +86,10 @@ def get_web_research_adapter() -> WorkbenchAdapter:
         web_search_tool=web_search_tool,
     )
     return WRAAdapter(agent)
+
+
+def get_context_compression_adapter() -> CWCAdapter:
+    return CWCAdapter()
 
 
 def get_knowledge_research_adapter() -> Iterator[WorkbenchAdapter]:
