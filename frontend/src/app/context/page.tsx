@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { ContextLabWorkspace } from "@/components/context-lab-workspace";
 
 export default function ContextPage() {
-  return <ComingSoon titleKey="navigation.context" />;
+  return <ContextLabWorkspace />;
 }
