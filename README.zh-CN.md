@@ -126,7 +126,7 @@ started
 - pip check：PASS
 - Frontend ESLint：PASS
 - TypeScript：PASS
-- v0.3.0 Next.js production build：待发布前人工验证
+- Next.js production build：PASS
 
 Fake GUI 已验证三种策略、非法 JSON 在 POST 前拦截、双语/主题与 Browser Console clean。真实 REST/GUI 已验证 no-op（`45 → 45`、节省 0、`compression_applied=false`、HTTP 200）、truncation（`114 → 69`、节省 45 个估算 Token、压缩率约 60.5%、`compressed_message_count=1`、HTTP 200）、TokenBudgetError → HTTP 422 与 Console clean。Duration 为每次运行的实测值，不作为固定 benchmark。
 

@@ -75,7 +75,7 @@ WRA and PKRA use synchronous run boundaries. Research SSE emits `started`, execu
 - Frontend ESLint and TypeScript checks pass.
 - Fake Context GUI covers all three strategies, invalid JSON blocking before POST, bilingual UI, themes, and a clean browser console.
 - Real Context REST/GUI covers no-op `45 → 45`, actual `114 → 69` truncation, TokenBudgetError → HTTP 422, and a clean browser console.
-- The final v0.3.0 Next.js production build remains a manual release verification.
+- The final v0.3.0 Next.js production build has passed release verification.
 
 ## Non Goals
 

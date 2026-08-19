@@ -120,4 +120,5 @@ Real Research may call DeepSeek and DDGS and may incur API costs. Research SSE u
 
 The Context Lab Fake GUI, real no-op compression, real `114 → 69` truncation, and TokenBudgetError → HTTP 422 paths have been manually verified. Execution duration varies per run and is not a fixed baseline.
 
-The final v0.3.0 Next.js production build remains a manual release verification.
+The v0.3.0 release baseline includes a successful Next.js production build.
+Run `cd frontend && npm run build` to repeat this local verification.

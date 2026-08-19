@@ -126,7 +126,7 @@ Neither endpoint provides native real-time token/tool streaming.
 - pip check: PASS
 - Frontend ESLint: PASS
 - TypeScript: PASS
-- Final v0.3.0 Next.js production build: pending manual release verification
+- Next.js production build: PASS
 
 Fake GUI validation covers all three strategies, invalid JSON blocking before POST, bilingual/theme behavior, and a clean browser console. Real REST/GUI validation covers no-op compression (`45 → 45`, zero saved, `compression_applied=false`, HTTP 200), truncation (`114 → 69`, 45 estimated tokens saved, approximately 60.5% ratio, `compressed_message_count=1`, HTTP 200), TokenBudgetError → HTTP 422, and a clean browser console. Duration is measured per run and is not a fixed benchmark.
 
