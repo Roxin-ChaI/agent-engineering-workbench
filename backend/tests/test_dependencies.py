@@ -1,16 +1,27 @@
+import inspect
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Never
 
 import pytest
+from ai_github_reviewer import (  # type: ignore[import-untyped]
+    ReviewerConfigurationError,
+)
 
 from agent_engineering_workbench import dependencies
+from agent_engineering_workbench.adapters.github_reviewer import (
+    GitHubReviewerAdapter,
+    ReviewerResultLike,
+)
 from agent_engineering_workbench.adapters.pkra import (
     PKRAAdapter,
     PKRAResultLike,
 )
 from agent_engineering_workbench.adapters.wra import WRAAdapter
 from agent_engineering_workbench.config import Settings
+from agent_engineering_workbench.github_review_errors import (
+    GitHubReviewConfigurationError,
+)
 
 
 class FakeAgent:
@@ -49,6 +60,33 @@ class FakePKRARunner:
         self.close_calls += 1
 
 
+@dataclass(frozen=True, repr=False)
+class FakeReviewerConfig:
+    deepseek_api_key: str
+    deepseek_base_url: str
+    deepseek_model: str
+
+    def __repr__(self) -> str:
+        return (
+            "FakeReviewerConfig(deepseek_api_key=<redacted>, "
+            f"deepseek_base_url={self.deepseek_base_url!r}, "
+            f"deepseek_model={self.deepseek_model!r})"
+        )
+
+
+class FakeReviewerRunner:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def review(self, pull_request_url: str) -> ReviewerResultLike:
+        raise AssertionError(
+            f"FakeReviewerRunner.review must not be called: {pull_request_url}"
+        )
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
 def install_fake_pkra_public_api(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -65,6 +103,21 @@ def install_fake_pkra_public_api(
         "_load_pkra_public_api",
         lambda: (FakeAgentRunnerConfig, fake_create_agent_runner),
     )
+
+
+def install_fake_reviewer_public_api(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    runner: FakeReviewerRunner,
+    captured_configs: list[FakeReviewerConfig],
+) -> None:
+    def fake_create_reviewer(config: object) -> FakeReviewerRunner:
+        assert isinstance(config, FakeReviewerConfig)
+        captured_configs.append(config)
+        return runner
+
+    monkeypatch.setattr(dependencies, "ReviewerConfig", FakeReviewerConfig)
+    monkeypatch.setattr(dependencies, "create_reviewer", fake_create_reviewer)
 
 
 def test_default_deepseek_provider_is_assembled_from_wra_public_factories(
@@ -171,6 +224,185 @@ def test_unknown_provider_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValueError, match="Unsupported model provider: unknown"):
         dependencies.get_web_research_adapter()
+
+
+def test_github_review_adapter_uses_public_factory_and_closes_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "not-a-real-key"
+    runner = FakeReviewerRunner()
+    captured_configs: list[FakeReviewerConfig] = []
+    install_fake_reviewer_public_api(
+        monkeypatch,
+        runner=runner,
+        captured_configs=captured_configs,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(
+            model_name="configured-model",
+            deepseek_api_key=secret,
+            deepseek_base_url="https://deepseek.example/",
+        ),
+    )
+
+    with contextmanager(dependencies.get_github_review_adapter)() as adapter:
+        assert isinstance(adapter, GitHubReviewerAdapter)
+        assert runner.close_calls == 0
+
+    assert runner.close_calls == 1
+    assert captured_configs == [
+        FakeReviewerConfig(
+            deepseek_api_key=secret,
+            deepseek_base_url="https://deepseek.example",
+            deepseek_model="configured-model",
+        )
+    ]
+    assert secret not in repr(captured_configs[0])
+
+
+def test_github_review_runner_closes_when_adapter_scope_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = FakeReviewerRunner()
+    install_fake_reviewer_public_api(
+        monkeypatch,
+        runner=runner,
+        captured_configs=[],
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(deepseek_api_key="not-a-real-key"),
+    )
+    expected = RuntimeError("adapter use failed")
+
+    with (
+        pytest.raises(RuntimeError) as exc_info,
+        contextmanager(dependencies.get_github_review_adapter)(),
+    ):
+        raise expected
+
+    assert exc_info.value is expected
+    assert runner.close_calls == 1
+
+
+def test_github_review_configuration_error_is_translated_without_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = FakeReviewerRunner()
+    expected = ReviewerConfigurationError("reviewer configuration failed")
+
+    def fail_reviewer_creation(config: object) -> Never:
+        assert isinstance(config, FakeReviewerConfig)
+        raise expected
+
+    monkeypatch.setattr(dependencies, "ReviewerConfig", FakeReviewerConfig)
+    monkeypatch.setattr(dependencies, "create_reviewer", fail_reviewer_creation)
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(deepseek_api_key="not-a-real-key"),
+    )
+
+    with (
+        pytest.raises(
+            GitHubReviewConfigurationError,
+            match="reviewer configuration failed",
+        ) as exc_info,
+        contextmanager(dependencies.get_github_review_adapter)(),
+    ):
+        pass
+
+    assert exc_info.value.__cause__ is expected
+    assert runner.close_calls == 0
+
+
+def test_unknown_github_review_creation_error_propagates_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = RuntimeError("runner creation failed")
+
+    def fail_reviewer_creation(config: object) -> Never:
+        assert isinstance(config, FakeReviewerConfig)
+        raise expected
+
+    monkeypatch.setattr(dependencies, "ReviewerConfig", FakeReviewerConfig)
+    monkeypatch.setattr(dependencies, "create_reviewer", fail_reviewer_creation)
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(deepseek_api_key="not-a-real-key"),
+    )
+
+    with (
+        pytest.raises(RuntimeError) as exc_info,
+        contextmanager(dependencies.get_github_review_adapter)(),
+    ):
+        pass
+
+    assert exc_info.value is expected
+
+
+@pytest.mark.parametrize("api_key", [None, "", "   "])
+def test_github_review_deepseek_api_key_is_required(
+    monkeypatch: pytest.MonkeyPatch,
+    api_key: str | None,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(deepseek_api_key=api_key),
+    )
+
+    with (
+        pytest.raises(
+            GitHubReviewConfigurationError,
+            match="DEEPSEEK_API_KEY is required",
+        ),
+        contextmanager(dependencies.get_github_review_adapter)(),
+    ):
+        pass
+
+
+def test_github_review_unknown_provider_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "get_settings",
+        lambda: Settings(
+            model_provider="unknown",
+            deepseek_api_key="not-a-real-key",
+        ),
+    )
+
+    with (
+        pytest.raises(
+            GitHubReviewConfigurationError,
+            match="Unsupported model provider: unknown",
+        ),
+        contextmanager(dependencies.get_github_review_adapter)(),
+    ):
+        pass
+
+
+def test_github_review_dependency_exposes_no_github_token_or_write_config() -> None:
+    source = inspect.getsource(dependencies.get_github_review_adapter)
+
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "github_token",
+            "comment",
+            "submit_review",
+            "approve",
+            "request_changes",
+        )
+    )
 
 
 def test_knowledge_adapter_uses_public_factory_and_closes_runner(

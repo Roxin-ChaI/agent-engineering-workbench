@@ -1,6 +1,11 @@
 from collections.abc import Iterator
 from typing import Protocol, cast
 
+from ai_github_reviewer import (  # type: ignore[import-untyped]
+    ReviewerConfig,
+    ReviewerConfigurationError,
+    create_reviewer,
+)
 from web_research_agent.agent import WebResearchAgent  # type: ignore[import-untyped]
 from web_research_agent.llm import (  # type: ignore[import-untyped]
     create_deepseek_model,
@@ -11,12 +16,19 @@ from web_research_agent.tools import (  # type: ignore[import-untyped]
 
 from agent_engineering_workbench.adapter import WorkbenchAdapter
 from agent_engineering_workbench.adapters.cwc import CWCAdapter
+from agent_engineering_workbench.adapters.github_reviewer import (
+    GitHubReviewerAdapter,
+    GitHubReviewerRunner,
+)
 from agent_engineering_workbench.adapters.pkra import (
     PKRAAdapter,
     PKRARunner,
 )
 from agent_engineering_workbench.adapters.wra import WRAAdapter
 from agent_engineering_workbench.config import Settings, get_settings
+from agent_engineering_workbench.github_review_errors import (
+    GitHubReviewConfigurationError,
+)
 
 
 class _AgentRunnerConfigFactory(Protocol):
@@ -90,6 +102,39 @@ def get_web_research_adapter() -> WorkbenchAdapter:
 
 def get_context_compression_adapter() -> CWCAdapter:
     return CWCAdapter()
+
+
+def get_github_review_adapter() -> Iterator[GitHubReviewerAdapter]:
+    settings = get_settings()
+    if settings.model_provider != "deepseek":
+        raise GitHubReviewConfigurationError(
+            f"Unsupported model provider: {settings.model_provider}"
+        )
+
+    api_key = settings.deepseek_api_key
+    if api_key is None or not api_key.strip():
+        raise GitHubReviewConfigurationError(
+            "DEEPSEEK_API_KEY is required for GitHub review"
+        )
+
+    try:
+        config = ReviewerConfig(
+            deepseek_api_key=api_key.strip(),
+            deepseek_base_url=settings.deepseek_base_url,
+            deepseek_model=settings.model_name,
+        )
+        runner = create_reviewer(config)
+    except ReviewerConfigurationError as exc:
+        raise GitHubReviewConfigurationError(str(exc)) from exc
+
+    adapter = GitHubReviewerAdapter(
+        cast(GitHubReviewerRunner, runner),
+        owns_runner=True,
+    )
+    try:
+        yield adapter
+    finally:
+        adapter.close()
 
 
 def get_knowledge_research_adapter() -> Iterator[WorkbenchAdapter]:
