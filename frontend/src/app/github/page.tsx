@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { GitHubReviewWorkspace } from "@/components/github-review-workspace";
 
 export default function GitHubPage() {
-  return <ComingSoon titleKey="navigation.github" />;
+  return <GitHubReviewWorkspace />;
 }
