@@ -1,6 +1,8 @@
 import type {
   ContextCompressionInput,
   ContextCompressionResult,
+  GitHubReviewRequest,
+  GitHubReviewResult,
   RunResult,
   StreamEvent,
   StreamEventType,
@@ -32,6 +34,18 @@ export async function compressContext(
     "Context compression",
     request,
   );
+}
+
+export async function reviewPullRequest(
+  prUrl: string,
+): Promise<GitHubReviewResult> {
+  const normalizedPrUrl = prUrl.trim();
+  if (!normalizedPrUrl) {
+    throw new Error("Pull Request URL must not be empty");
+  }
+
+  const request: GitHubReviewRequest = { pr_url: normalizedPrUrl };
+  return postJson("/api/github/review", "GitHub review", request);
 }
 
 async function runResearch(

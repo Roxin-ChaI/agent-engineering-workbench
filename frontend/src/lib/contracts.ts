@@ -76,3 +76,55 @@ export interface ContextCompressionResult {
   compressed_message_count: number;
   preserved_message_count: number;
 }
+
+export interface GitHubReviewRequest {
+  pr_url: string;
+}
+
+export interface GitHubReviewTarget {
+  owner: string;
+  repository: string;
+  pull_number: number;
+}
+
+export interface GitHubPullRequestMetadata {
+  title: string;
+  state: string;
+  author: string;
+  base_branch: string;
+  head_branch: string;
+  created_at: string;
+  updated_at: string;
+  changed_files: number;
+  additions: number;
+  deletions: number;
+  commits: number;
+}
+
+export type GitHubReviewSeverity = "Critical" | "High" | "Medium" | "Low";
+
+export interface GitHubReviewFinding {
+  severity: GitHubReviewSeverity;
+  file_path: string;
+  location: string;
+  issue: string;
+  evidence: string;
+  recommendation: string;
+}
+
+export type GitHubReviewAssessment =
+  | "Approve"
+  | "Approve with minor comments"
+  | "Request changes"
+  | "Insufficient data";
+
+export interface GitHubReviewResult {
+  target: GitHubReviewTarget;
+  pull_request: GitHubPullRequestMetadata;
+  summary: string;
+  findings: GitHubReviewFinding[];
+  test_gaps: string;
+  maintainability: string;
+  assessment: GitHubReviewAssessment;
+  markdown: string;
+}
