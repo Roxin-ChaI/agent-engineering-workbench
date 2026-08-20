@@ -1,9 +1,11 @@
+import inspect
 import json
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
+import agent_engineering_workbench.app as production_app_module
 from agent_engineering_workbench import dependencies, dev_server
 from agent_engineering_workbench.adapter import WorkbenchAdapter
 from agent_engineering_workbench.adapters.cwc import CWCAdapter
@@ -17,17 +19,32 @@ from agent_engineering_workbench.context_contracts import (
 from agent_engineering_workbench.contracts import RunResult, RunStatus
 from agent_engineering_workbench.dependencies import (
     get_context_compression_adapter,
+    get_github_review_adapter,
     get_knowledge_research_adapter,
     get_web_research_adapter,
 )
 from agent_engineering_workbench.dev_server import (
     FakeContextCompressionAdapter,
+    FakeGitHubReviewAdapter,
     FakeKnowledgeResearchAdapter,
     FakeWebResearchAdapter,
     get_fake_context_compression_adapter,
+    get_fake_github_review_adapter,
     get_fake_knowledge_research_adapter,
     get_fake_web_research_adapter,
 )
+from agent_engineering_workbench.github_review_contracts import (
+    GitHubReviewAssessment,
+    GitHubReviewResult,
+    GitHubReviewSeverity,
+)
+from agent_engineering_workbench.github_review_errors import (
+    GitHubReviewerClosedError,
+)
+
+SUCCESS_PR_URL = "https://github.com/example/repository/pull/42"
+EMPTY_FINDINGS_PR_URL = "https://github.com/example/repository/pull/43"
+ERROR_PR_URL = "https://github.com/example/repository/pull/500"
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +57,9 @@ def configure_fake_dependency() -> Iterator[None]:
     )
     app.dependency_overrides[get_context_compression_adapter] = (
         get_fake_context_compression_adapter
+    )
+    app.dependency_overrides[get_github_review_adapter] = (
+        get_fake_github_review_adapter
     )
     yield
     app.dependency_overrides.clear()
@@ -94,6 +114,9 @@ def test_dev_app_overrides_production_dependencies() -> None:
     )
     assert app.dependency_overrides[get_context_compression_adapter] is (
         get_fake_context_compression_adapter
+    )
+    assert app.dependency_overrides[get_github_review_adapter] is (
+        get_fake_github_review_adapter
     )
 
 
@@ -283,6 +306,154 @@ def test_production_context_dependency_remains_real_without_dev_override() -> No
 
     assert isinstance(adapter, CWCAdapter)
     assert get_context_compression_adapter not in app.dependency_overrides
+
+
+def test_github_review_endpoint_returns_deterministic_fake_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "create_reviewer",
+        lambda *_args, **_kwargs: pytest.fail(
+            "production Reviewer runner must not be created"
+        ),
+    )
+
+    response = TestClient(app).post(
+        "/api/github/review",
+        json={"pr_url": SUCCESS_PR_URL},
+    )
+
+    assert response.status_code == 200
+    result = GitHubReviewResult.model_validate(response.json())
+    assert result.target.model_dump() == {
+        "owner": "example",
+        "repository": "repository",
+        "pull_number": 42,
+    }
+    assert result.pull_request.model_dump() == {
+        "title": "Fix context handling in review pipeline",
+        "state": "open",
+        "author": "example-user",
+        "base_branch": "main",
+        "head_branch": "fix/context-handling",
+        "created_at": "2026-01-10T09:00:00Z",
+        "updated_at": "2026-01-12T15:30:00Z",
+        "changed_files": 2,
+        "additions": 28,
+        "deletions": 7,
+        "commits": 2,
+    }
+    assert "improves context handling" in result.summary
+    assert len(result.findings) == 2
+    assert [finding.severity for finding in result.findings] == [
+        GitHubReviewSeverity.MEDIUM,
+        GitHubReviewSeverity.LOW,
+    ]
+    assert [finding.file_path for finding in result.findings] == [
+        "src/reviewer/context.py",
+        "tests/test_context.py",
+    ]
+    assert all(
+        (
+            finding.location
+            and finding.issue
+            and finding.evidence
+            and finding.recommendation
+        )
+        for finding in result.findings
+    )
+    assert "integration test" in result.test_gaps
+    assert "focused" in result.maintainability
+    assert (
+        result.assessment
+        is GitHubReviewAssessment.APPROVE_WITH_MINOR_COMMENTS
+    )
+    assert "**Medium**" in result.markdown
+    assert "**Low**" in result.markdown
+
+
+def test_github_review_empty_findings_scenario_returns_success() -> None:
+    response = TestClient(app).post(
+        "/api/github/review",
+        json={"pr_url": EMPTY_FINDINGS_PR_URL},
+    )
+
+    assert response.status_code == 200
+    result = GitHubReviewResult.model_validate(response.json())
+    assert result.target.pull_number == 43
+    assert result.findings == ()
+    assert result.summary
+    assert result.test_gaps
+    assert result.maintainability
+    assert result.assessment is GitHubReviewAssessment.APPROVE
+    assert result.markdown
+
+
+def test_github_review_error_scenario_returns_safe_502() -> None:
+    response = TestClient(app).post(
+        "/api/github/review",
+        json={"pr_url": ERROR_PR_URL},
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Unable to generate the pull request review."
+    }
+    assert "Deterministic fake" not in response.text
+
+
+def test_github_review_invalid_url_returns_422() -> None:
+    response = TestClient(app).post(
+        "/api/github/review",
+        json={"pr_url": "not-a-pull-request-url"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Enter a public GitHub Pull Request URL"
+    }
+
+
+def test_fake_github_review_adapter_close_is_idempotent() -> None:
+    adapter = FakeGitHubReviewAdapter()
+
+    adapter.close()
+    adapter.close()
+
+    with pytest.raises(GitHubReviewerClosedError, match="closed"):
+        adapter.review(SUCCESS_PR_URL)
+
+
+def test_fake_github_review_has_no_external_or_write_capability() -> None:
+    source = inspect.getsource(FakeGitHubReviewAdapter)
+
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "ai_github_reviewer",
+            "create_reviewer",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "github_token",
+            "DEEPSEEK_API_KEY",
+            "httpx",
+            "requests",
+            "create_comment",
+            "submit_review",
+            "merge_pull_request",
+        )
+    )
+
+
+def test_production_app_does_not_enable_fake_github_review() -> None:
+    app.dependency_overrides.pop(get_github_review_adapter)
+
+    production_source = inspect.getsource(production_app_module)
+
+    assert get_github_review_adapter not in app.dependency_overrides
+    assert "dev_server" not in production_source
+    assert "get_fake_github_review_adapter" not in production_source
 
 
 def test_main_uses_local_uvicorn_settings(monkeypatch: pytest.MonkeyPatch) -> None:
