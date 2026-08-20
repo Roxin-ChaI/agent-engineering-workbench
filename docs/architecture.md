@@ -12,22 +12,27 @@ Browser
     │                    → PostgreSQL / pgvector
     │                    → DeepSeek V4 Flash
     │                    → optional DDGS Web Search
-    └── CWCAdapter → CWC v0.1.0 public compress()
+    ├── CWCAdapter → CWC v0.1.0 public compress()
+    └── GitHubReviewerAdapter
+                         → AI GitHub Reviewer v0.2.0 public runner
+                         → anonymous GitHub REST GET
+                         → DeepSeek V4 Flash
 → Workbench-owned result contracts
 → GUI
 ```
 
-Workbench owns UI, integration, presentation, and API boundaries. WRA, PKRA, and CWC remain independent repositories; Workbench neither copies their source nor invokes their CLIs through subprocesses.
+Workbench owns UI, integration, presentation, and API boundaries. WRA, PKRA, CWC, and AI GitHub Reviewer remain independent repositories; Workbench neither copies their source nor invokes their CLIs through subprocesses.
 
 ## Frontend
 
-Next.js, React, TypeScript, and Tailwind CSS provide three workspaces:
+Next.js, React, TypeScript, and Tailwind CSS provide four workspaces:
 
 - `/research/web`
 - `/research/knowledge`
 - `/context`
+- `/github`
 
-Research pages share `RunResult` presentation and REST/SSE clients. Context Lab instead uses dedicated TypeScript Context DTOs and `compressContext()`. The Frontend never imports Python, CWC, WRA, PKRA, model, or database types.
+Research pages share `RunResult` presentation and REST/SSE clients. Context Lab and GitHub Review use dedicated Workbench-owned TypeScript contracts and REST clients. The Frontend never imports Python, CWC, WRA, PKRA, Reviewer, model, or database types.
 
 ## Backend API
 
@@ -38,8 +43,9 @@ FastAPI provides:
 - `POST /api/research/knowledge`
 - `POST /api/research/knowledge/stream`
 - `POST /api/context/compress`
+- `POST /api/github/review`
 
-Routers receive adapters through FastAPI dependencies. They do not create model, search, database, or compression internals. Context uses REST only and has no SSE endpoint.
+Routers receive adapters through FastAPI dependencies. They do not create model, search, database, compression, or Reviewer internals. Context and GitHub Review use REST only and have no SSE endpoints.
 
 ## Research Adapter Boundary
 
@@ -87,9 +93,30 @@ CWC TokenBudgetError
 
 Only the known public budget failure is translated. Unexpected CWC/Adapter exceptions retain existing server-error semantics.
 
+## GitHub Review Boundary
+
+```text
+Browser
+→ /github
+→ reviewPullRequest()
+→ POST /api/github/review
+→ GitHubReviewerAdapter
+→ AI GitHub Reviewer v0.2.0 public create_reviewer()/runner
+→ anonymous GitHub REST GET
+→ DeepSeek V4 Flash
+→ Workbench-owned GitHub Review Result
+→ UI
+```
+
+The request contains a public Pull Request URL. The structured result contains PR metadata, Summary, Findings, Test Gaps, Maintainability, Assessment, and Markdown Review. A Finding contains severity, file path, location, issue, evidence, and recommendation. The Adapter translates the Reviewer's public DTOs without importing private modules or invoking its CLI.
+
+The request-scoped dependency creates the public Reviewer runner and closes it in `finally`. Invalid PR URLs are rejected with HTTP 422; categorized upstream/review protocol failures become HTTP 502; unknown internal failures retain a safe HTTP 500 boundary.
+
+GitHub Review is read-only: public PRs only, anonymous GitHub REST GET, no GitHub token, no comments, no submitted review, no approve/request-changes action, no merge/close, no repository mutation, and no execution of PR code. Assessment is display data, not a GitHub action.
+
 ## Production and Fake Isolation
 
-`agent_engineering_workbench.app:app` resolves the real `CWCAdapter`. The local `agent_engineering_workbench.dev_server:app` module installs a deterministic Fake Context dependency override for GUI testing. The Fake path does not call CWC and does not affect a production app that is launched directly.
+`agent_engineering_workbench.app:app` resolves all real adapters. Only `agent_engineering_workbench.dev_server:app` installs deterministic Fake Web, Knowledge, Context, and GitHub Review dependency overrides. Fake GitHub Review supports PR 42 (two Findings), PR 43 (empty Findings), PR 500 (HTTP 502), and invalid URL (HTTP 422). The production app never falls back to a Fake adapter when configuration or an upstream call fails.
 
 Fake Context Metrics are test fixtures, not benchmarks: `no_compression` reports `120 → 120`; `truncation` and `windowed` report `120 → 48`; duration is fixed at 3 ms.
 
@@ -111,6 +138,7 @@ This is not native real-time Token/Tool streaming. Context Lab does not use this
 - v0.1.0: Workbench Shell and WRA.
 - v0.2.0: PKRA Production Runner, Knowledge REST/SSE, Knowledge Frontend Workspace, and Fake Integration.
 - v0.3.0: CWCAdapter, Context REST API, Context Lab, Fake Context Integration, and HTTP 422 budget boundary.
+- v0.4.0: AI GitHub Reviewer v0.2.0 Adapter/API/Frontend integration, deterministic Fake scenarios, and read-only GitHub Review workspace.
 
 ## Known Limitations
 
