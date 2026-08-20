@@ -8,13 +8,14 @@ version = "0.3.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",
-    "openai",
+    "openai>=2.45,<3",
     "uvicorn",
     "pydantic",
     "pydantic-settings",
     "web-research-agent @ git+https://github.com/Roxin-ChaI/web-research-agent.git@v0.2.0",
     "production-knowledge-research-agent[e2e] @ git+https://github.com/Roxin-ChaI/production-knowledge-research-agent.git@v0.4.0",
     "context-window-compressor @ git+https://github.com/Roxin-ChaI/context-window-compressor.git@v0.1.0",
+    "ai-github-reviewer @ git+https://github.com/Roxin-ChaI/ai-github-reviewer.git@v0.2.0",
 ]
 
 [project.optional-dependencies]
