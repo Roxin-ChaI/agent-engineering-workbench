@@ -3,7 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agent_engineering_workbench import __version__
-from agent_engineering_workbench.api import context_router, research_router
+from agent_engineering_workbench.api import (
+    context_router,
+    github_router,
+    research_router,
+)
 from agent_engineering_workbench.config import get_settings
 
 
@@ -25,6 +29,7 @@ app.add_middleware(
 )
 app.include_router(research_router)
 app.include_router(context_router)
+app.include_router(github_router)
 
 
 @app.get("/health", response_model=HealthResponse)
