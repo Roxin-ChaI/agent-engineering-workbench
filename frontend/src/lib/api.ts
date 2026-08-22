@@ -3,6 +3,7 @@ import type {
   ContextCompressionResult,
   GitHubReviewRequest,
   GitHubReviewResult,
+  ResumeOptimizationResult,
   RunResult,
   StreamEvent,
   StreamEventType,
@@ -48,6 +49,16 @@ export async function reviewPullRequest(
   return postJson("/api/github/review", "GitHub review", request);
 }
 
+export async function optimizeResume(
+  resume: File,
+  jobDescription: string,
+): Promise<ResumeOptimizationResult> {
+  const formData = new FormData();
+  formData.append("resume", resume);
+  formData.append("job_description", jobDescription);
+  return post("/api/resume/optimize", "Resume optimization", formData);
+}
+
 async function runResearch(
   path: string,
   requestName: string,
@@ -67,12 +78,21 @@ async function postJson<Result>(
   requestName: string,
   body: unknown,
 ): Promise<Result> {
+  return post(path, requestName, JSON.stringify(body), {
+    "Content-Type": "application/json",
+  });
+}
+
+async function post<Result>(
+  path: string,
+  requestName: string,
+  body: BodyInit,
+  headers?: HeadersInit,
+): Promise<Result> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+    headers,
+    body,
   });
 
   if (!response.ok) {

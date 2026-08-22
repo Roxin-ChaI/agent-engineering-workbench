@@ -128,3 +128,66 @@ export interface GitHubReviewResult {
   assessment: GitHubReviewAssessment;
   markdown: string;
 }
+
+export type ResumeMatchRating = "high" | "medium" | "low";
+
+export type ResumeAssessmentStatus =
+  | "well_supported"
+  | "underrepresented"
+  | "unsupported";
+
+export type ResumeSectionType =
+  | "basic_info"
+  | "summary"
+  | "skills"
+  | "experience"
+  | "projects"
+  | "education"
+  | "certifications"
+  | "other";
+
+export interface ResumeRequirementAssessment {
+  requirement_id: string;
+  status: ResumeAssessmentStatus;
+  source_block_ids: string[];
+  reason: string;
+  suggested_action: string;
+}
+
+export interface ResumeMatchAnalysis {
+  overall_rating: ResumeMatchRating;
+  overall_evaluation: string;
+  assessments: ResumeRequirementAssessment[];
+  main_issues: string[];
+  section_suggestions: string[];
+  keyword_suggestions: string[];
+  truthfulness_risks: string[];
+  content_not_to_add: string[];
+}
+
+export interface ResumeOptimizationItem {
+  text: string;
+  source_block_ids: string[];
+  related_requirement_ids: string[];
+  needs_review: boolean;
+  review_note: string | null;
+}
+
+export interface ResumeOptimizationSection {
+  section_type: ResumeSectionType;
+  title: string;
+  items: ResumeOptimizationItem[];
+  source_block_ids: string[];
+}
+
+export interface OptimizedResume {
+  sections: ResumeOptimizationSection[];
+  pending_user_inputs: string[];
+  warnings: string[];
+}
+
+export interface ResumeOptimizationResult {
+  analysis: ResumeMatchAnalysis;
+  optimized_resume: OptimizedResume;
+  warnings: string[];
+}
