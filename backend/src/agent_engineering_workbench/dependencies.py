@@ -6,6 +6,13 @@ from ai_github_reviewer import (  # type: ignore[import-untyped]
     ReviewerConfigurationError,
     create_reviewer,
 )
+from ai_resume_optimizer import (  # type: ignore[import-untyped]
+    ConfigurationError as PublicResumeConfigurationError,
+)
+from ai_resume_optimizer import (
+    ResumeOptimizerConfig,
+    create_resume_optimizer,
+)
 from web_research_agent.agent import WebResearchAgent  # type: ignore[import-untyped]
 from web_research_agent.llm import (  # type: ignore[import-untyped]
     create_deepseek_model,
@@ -24,10 +31,17 @@ from agent_engineering_workbench.adapters.pkra import (
     PKRAAdapter,
     PKRARunner,
 )
+from agent_engineering_workbench.adapters.resume_optimizer import (
+    ResumeOptimizerAdapter,
+    ResumeOptimizerRunnerProtocol,
+)
 from agent_engineering_workbench.adapters.wra import WRAAdapter
 from agent_engineering_workbench.config import Settings, get_settings
 from agent_engineering_workbench.github_review_errors import (
     GitHubReviewConfigurationError,
+)
+from agent_engineering_workbench.resume_errors import (
+    ResumeOptimizationConfigurationError,
 )
 
 
@@ -131,6 +145,37 @@ def get_github_review_adapter() -> Iterator[GitHubReviewerAdapter]:
         cast(GitHubReviewerRunner, runner),
         owns_runner=True,
     )
+    try:
+        yield adapter
+    finally:
+        adapter.close()
+
+
+def get_resume_optimizer_adapter() -> Iterator[ResumeOptimizerAdapter]:
+    settings = get_settings()
+    if settings.model_provider != "deepseek":
+        raise ResumeOptimizationConfigurationError(
+            "Resume optimizer is not configured."
+        )
+
+    api_key = settings.deepseek_api_key
+    if api_key is None or not api_key.strip():
+        raise ResumeOptimizationConfigurationError(
+            "Resume optimizer is not configured."
+        )
+
+    try:
+        config = ResumeOptimizerConfig(
+            deepseek_api_key=api_key.strip(),
+            deepseek_model=settings.model_name,
+        )
+        runner = create_resume_optimizer(config)
+    except PublicResumeConfigurationError as exc:
+        raise ResumeOptimizationConfigurationError(
+            "Resume optimizer is not configured."
+        ) from exc
+
+    adapter = ResumeOptimizerAdapter(cast(ResumeOptimizerRunnerProtocol, runner))
     try:
         yield adapter
     finally:
