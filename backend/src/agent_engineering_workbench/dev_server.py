@@ -1,6 +1,8 @@
 """Local-only FastAPI entry point backed by deterministic fake integration data."""
 
 import re
+from collections.abc import Iterator
+from pathlib import Path
 
 import uvicorn
 
@@ -23,6 +25,7 @@ from agent_engineering_workbench.dependencies import (
     get_context_compression_adapter,
     get_github_review_adapter,
     get_knowledge_research_adapter,
+    get_resume_optimizer_adapter,
     get_web_research_adapter,
 )
 from agent_engineering_workbench.github_review_contracts import (
@@ -37,6 +40,21 @@ from agent_engineering_workbench.github_review_errors import (
     GitHubReviewerClosedError,
     GitHubReviewExecutionError,
     InvalidGitHubPullRequestError,
+)
+from agent_engineering_workbench.resume_contracts import (
+    OptimizedResume,
+    ResumeAssessmentStatus,
+    ResumeMatchAnalysis,
+    ResumeMatchRating,
+    ResumeOptimizationItem,
+    ResumeOptimizationResult,
+    ResumeOptimizationSection,
+    ResumeRequirementAssessment,
+    ResumeSectionType,
+)
+from agent_engineering_workbench.resume_errors import (
+    ResumeOptimizationUpstreamError,
+    ResumeOptimizerClosedError,
 )
 
 _PUBLIC_PULL_REQUEST_URL = re.compile(
@@ -318,6 +336,200 @@ class FakeGitHubReviewAdapter:
         self._closed = True
 
 
+class FakeResumeOptimizerAdapter:
+    """Return deterministic Resume Optimization data without external calls."""
+
+    def __init__(self) -> None:
+        self._closed = False
+
+    def optimize(
+        self,
+        *,
+        resume_path: Path,
+        job_description: str,
+    ) -> ResumeOptimizationResult:
+        if self._closed:
+            raise ResumeOptimizerClosedError(
+                "Fake resume optimizer adapter is closed."
+            )
+        if "FAKE_CASE_UPSTREAM_ERROR" in job_description:
+            raise ResumeOptimizationUpstreamError(
+                "Deterministic fake resume optimizer upstream failure."
+            )
+
+        include_warnings = "FAKE_CASE_WARNINGS" in job_description
+        return _fake_resume_optimization_result(
+            resume_suffix=resume_path.suffix,
+            include_warnings=include_warnings,
+        )
+
+    def close(self) -> None:
+        self._closed = True
+
+
+def _fake_resume_optimization_result(
+    *,
+    resume_suffix: str,
+    include_warnings: bool,
+) -> ResumeOptimizationResult:
+    pending_user_inputs = (
+        (
+            "Provide a verified request-volume metric for the API project.",
+            "Confirm whether the candidate owned the database migration.",
+        )
+        if include_warnings
+        else ()
+    )
+    optimized_warnings = (
+        (
+            "A project responsibility remains pending candidate confirmation.",
+        )
+        if include_warnings
+        else ()
+    )
+    result_warnings = (
+        (
+            "The source resume did not provide a verified scale metric.",
+        )
+        if include_warnings
+        else ()
+    )
+
+    return ResumeOptimizationResult(
+        analysis=ResumeMatchAnalysis(
+            overall_rating=(
+                ResumeMatchRating.MEDIUM
+                if include_warnings
+                else ResumeMatchRating.HIGH
+            ),
+            overall_evaluation=(
+                "Candidate demonstrates solid backend engineering fundamentals "
+                "but should make API ownership and measurable testing impact "
+                f"more explicit. The local fake input used {resume_suffix}."
+            ),
+            assessments=(
+                ResumeRequirementAssessment(
+                    requirement_id="python-backend",
+                    status=ResumeAssessmentStatus.WELL_SUPPORTED,
+                    source_block_ids=("experience-1", "skills-1"),
+                    reason=(
+                        "The resume directly describes production Python API "
+                        "development."
+                    ),
+                    suggested_action=(
+                        "Keep the Python ownership evidence near the top of "
+                        "the experience section."
+                    ),
+                ),
+                ResumeRequirementAssessment(
+                    requirement_id="automated-testing",
+                    status=ResumeAssessmentStatus.UNDERREPRESENTED,
+                    source_block_ids=("experience-1",),
+                    reason=(
+                        "Automated testing is mentioned without measurable "
+                        "impact or scope."
+                    ),
+                    suggested_action=(
+                        "Add a verified outcome from the existing test work."
+                    ),
+                ),
+                ResumeRequirementAssessment(
+                    requirement_id="cloud-operations",
+                    status=ResumeAssessmentStatus.UNSUPPORTED,
+                    source_block_ids=(),
+                    reason=(
+                        "The source resume does not provide cloud operations "
+                        "evidence."
+                    ),
+                    suggested_action=(
+                        "Do not add cloud operations claims without candidate "
+                        "confirmation."
+                    ),
+                ),
+            ),
+            main_issues=(
+                "API ownership is described without a verified scale metric.",
+                "Testing impact is less visible than implementation work.",
+            ),
+            section_suggestions=(
+                "Lead the experience section with Python REST API ownership.",
+                "Group verified SQL and automated testing evidence together.",
+            ),
+            keyword_suggestions=(
+                "Python",
+                "REST API",
+                "SQL",
+                "automated testing",
+            ),
+            truthfulness_risks=(
+                "Do not infer request volume or team size from the source.",
+            ),
+            content_not_to_add=(
+                "Unverified cloud platform ownership.",
+            ),
+        ),
+        optimized_resume=OptimizedResume(
+            sections=(
+                ResumeOptimizationSection(
+                    section_type=ResumeSectionType.SUMMARY,
+                    title="Professional Summary",
+                    items=(
+                        ResumeOptimizationItem(
+                            text=(
+                                "Backend engineer experienced in Python, REST "
+                                "APIs, SQL, and automated testing."
+                            ),
+                            source_block_ids=("summary-1", "skills-1"),
+                            related_requirement_ids=(
+                                "python-backend",
+                                "automated-testing",
+                            ),
+                            needs_review=False,
+                            review_note=None,
+                        ),
+                    ),
+                    source_block_ids=("summary-1", "skills-1"),
+                ),
+                ResumeOptimizationSection(
+                    section_type=ResumeSectionType.EXPERIENCE,
+                    title="Experience",
+                    items=(
+                        ResumeOptimizationItem(
+                            text=(
+                                "Owned Python REST API implementation and SQL "
+                                "integration for a backend service."
+                            ),
+                            source_block_ids=("experience-1",),
+                            related_requirement_ids=("python-backend",),
+                            needs_review=False,
+                            review_note=None,
+                        ),
+                        ResumeOptimizationItem(
+                            text=(
+                                "Expanded automated tests for critical API "
+                                "behavior."
+                            ),
+                            source_block_ids=("experience-1",),
+                            related_requirement_ids=("automated-testing",),
+                            needs_review=include_warnings,
+                            review_note=(
+                                "Add a verified impact metric before using this "
+                                "item."
+                                if include_warnings
+                                else None
+                            ),
+                        ),
+                    ),
+                    source_block_ids=("experience-1",),
+                ),
+            ),
+            pending_user_inputs=pending_user_inputs,
+            warnings=optimized_warnings,
+        ),
+        warnings=result_warnings,
+    )
+
+
 def get_fake_web_research_adapter() -> WorkbenchAdapter:
     return FakeWebResearchAdapter()
 
@@ -334,6 +546,14 @@ def get_fake_github_review_adapter() -> FakeGitHubReviewAdapter:
     return FakeGitHubReviewAdapter()
 
 
+def get_fake_resume_optimizer_adapter() -> Iterator[FakeResumeOptimizerAdapter]:
+    adapter = FakeResumeOptimizerAdapter()
+    try:
+        yield adapter
+    finally:
+        adapter.close()
+
+
 app.dependency_overrides[get_web_research_adapter] = (
     get_fake_web_research_adapter
 )
@@ -345,6 +565,9 @@ app.dependency_overrides[get_context_compression_adapter] = (
 )
 app.dependency_overrides[get_github_review_adapter] = (
     get_fake_github_review_adapter
+)
+app.dependency_overrides[get_resume_optimizer_adapter] = (
+    get_fake_resume_optimizer_adapter
 )
 
 

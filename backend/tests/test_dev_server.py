@@ -1,6 +1,8 @@
 import inspect
 import json
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Protocol
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,16 +23,19 @@ from agent_engineering_workbench.dependencies import (
     get_context_compression_adapter,
     get_github_review_adapter,
     get_knowledge_research_adapter,
+    get_resume_optimizer_adapter,
     get_web_research_adapter,
 )
 from agent_engineering_workbench.dev_server import (
     FakeContextCompressionAdapter,
     FakeGitHubReviewAdapter,
     FakeKnowledgeResearchAdapter,
+    FakeResumeOptimizerAdapter,
     FakeWebResearchAdapter,
     get_fake_context_compression_adapter,
     get_fake_github_review_adapter,
     get_fake_knowledge_research_adapter,
+    get_fake_resume_optimizer_adapter,
     get_fake_web_research_adapter,
 )
 from agent_engineering_workbench.github_review_contracts import (
@@ -41,10 +46,38 @@ from agent_engineering_workbench.github_review_contracts import (
 from agent_engineering_workbench.github_review_errors import (
     GitHubReviewerClosedError,
 )
+from agent_engineering_workbench.resume_contracts import (
+    ResumeAssessmentStatus,
+    ResumeMatchRating,
+    ResumeOptimizationResult,
+    ResumeSectionType,
+)
+from agent_engineering_workbench.resume_errors import (
+    ResumeOptimizerClosedError,
+)
 
 SUCCESS_PR_URL = "https://github.com/example/repository/pull/42"
 EMPTY_FINDINGS_PR_URL = "https://github.com/example/repository/pull/43"
 ERROR_PR_URL = "https://github.com/example/repository/pull/500"
+RESUME_CONTENT = b"deterministic fake resume document"
+RESUME_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+NORMAL_RESUME_JOB_DESCRIPTION = (
+    "Backend engineer requiring Python, REST API, SQL, and automated testing."
+)
+WARNINGS_RESUME_JOB_DESCRIPTION = "FAKE_CASE_WARNINGS"
+ERROR_RESUME_JOB_DESCRIPTION = "FAKE_CASE_UPSTREAM_ERROR"
+
+
+class ResponseLike(Protocol):
+    @property
+    def status_code(self) -> int: ...
+
+    @property
+    def text(self) -> str: ...
+
+    def json(self) -> dict[str, object]: ...
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +93,9 @@ def configure_fake_dependency() -> Iterator[None]:
     )
     app.dependency_overrides[get_github_review_adapter] = (
         get_fake_github_review_adapter
+    )
+    app.dependency_overrides[get_resume_optimizer_adapter] = (
+        get_fake_resume_optimizer_adapter
     )
     yield
     app.dependency_overrides.clear()
@@ -117,6 +153,9 @@ def test_dev_app_overrides_production_dependencies() -> None:
     )
     assert app.dependency_overrides[get_github_review_adapter] is (
         get_fake_github_review_adapter
+    )
+    assert app.dependency_overrides[get_resume_optimizer_adapter] is (
+        get_fake_resume_optimizer_adapter
     )
 
 
@@ -454,6 +493,206 @@ def test_production_app_does_not_enable_fake_github_review() -> None:
     assert get_github_review_adapter not in app.dependency_overrides
     assert "dev_server" not in production_source
     assert "get_fake_github_review_adapter" not in production_source
+
+
+def post_fake_resume(
+    *,
+    filename: str = "sample-resume.docx",
+    content_type: str = RESUME_CONTENT_TYPE,
+    job_description: str = NORMAL_RESUME_JOB_DESCRIPTION,
+) -> ResponseLike:
+    return TestClient(app).post(
+        "/api/resume/optimize",
+        files={"resume": (filename, RESUME_CONTENT, content_type)},
+        data={"job_description": job_description},
+    )
+
+
+def test_resume_endpoint_returns_complete_deterministic_fake_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "create_resume_optimizer",
+        lambda *_args, **_kwargs: pytest.fail(
+            "production Resume Optimizer runner must not be created"
+        ),
+    )
+
+    response = post_fake_resume()
+
+    assert response.status_code == 200
+    payload = response.json()
+    result = ResumeOptimizationResult.model_validate(payload)
+    assert result.analysis.overall_rating is ResumeMatchRating.HIGH
+    assert result.analysis.overall_evaluation
+    assert [assessment.status for assessment in result.analysis.assessments] == [
+        ResumeAssessmentStatus.WELL_SUPPORTED,
+        ResumeAssessmentStatus.UNDERREPRESENTED,
+        ResumeAssessmentStatus.UNSUPPORTED,
+    ]
+    assert len(result.analysis.main_issues) == 2
+    assert len(result.analysis.section_suggestions) == 2
+    assert result.analysis.keyword_suggestions == (
+        "Python",
+        "REST API",
+        "SQL",
+        "automated testing",
+    )
+    assert result.analysis.truthfulness_risks
+    assert result.analysis.content_not_to_add
+    assert [section.section_type for section in result.optimized_resume.sections] == [
+        ResumeSectionType.SUMMARY,
+        ResumeSectionType.EXPERIENCE,
+    ]
+    assert sum(len(section.items) for section in result.optimized_resume.sections) == 3
+    assert result.optimized_resume.pending_user_inputs == ()
+    assert result.optimized_resume.warnings == ()
+    assert result.warnings == ()
+    assert "output_paths" not in payload
+
+
+def test_resume_warnings_scenario_returns_distinct_pending_and_warning_data() -> None:
+    response = post_fake_resume(job_description=WARNINGS_RESUME_JOB_DESCRIPTION)
+
+    assert response.status_code == 200
+    result = ResumeOptimizationResult.model_validate(response.json())
+    assert result.analysis.overall_rating is ResumeMatchRating.MEDIUM
+    assert len(result.optimized_resume.pending_user_inputs) == 2
+    assert len(result.optimized_resume.warnings) == 1
+    assert len(result.warnings) == 1
+    assert any(
+        item.needs_review and item.review_note
+        for section in result.optimized_resume.sections
+        for item in section.items
+    )
+
+
+def test_resume_upstream_scenario_returns_safe_502_and_closes_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    closed_adapters: list[FakeResumeOptimizerAdapter] = []
+    original_close = FakeResumeOptimizerAdapter.close
+
+    def recording_close(adapter: FakeResumeOptimizerAdapter) -> None:
+        original_close(adapter)
+        closed_adapters.append(adapter)
+
+    monkeypatch.setattr(FakeResumeOptimizerAdapter, "close", recording_close)
+
+    response = post_fake_resume(job_description=ERROR_RESUME_JOB_DESCRIPTION)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Resume optimizer returned an unusable result."
+    }
+    assert "Deterministic fake" not in response.text
+    assert "upstream" not in response.text.lower()
+    assert len(closed_adapters) == 1
+
+
+def test_resume_unsupported_format_uses_real_upload_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        FakeResumeOptimizerAdapter,
+        "optimize",
+        lambda *_args, **_kwargs: pytest.fail(
+            "fake adapter must not receive unsupported uploads"
+        ),
+    )
+
+    response = post_fake_resume(filename="resume.txt", content_type="text/plain")
+
+    assert response.status_code == 415
+    assert response.json() == {
+        "detail": "Resume must be a PDF or DOCX file."
+    }
+
+
+def test_resume_dev_wiring_preserves_temp_cleanup_and_request_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called_paths: list[Path] = []
+    path_exists_during_call: list[bool] = []
+    closed_adapters: list[FakeResumeOptimizerAdapter] = []
+    original_optimize = FakeResumeOptimizerAdapter.optimize
+    original_close = FakeResumeOptimizerAdapter.close
+
+    def recording_optimize(
+        adapter: FakeResumeOptimizerAdapter,
+        *,
+        resume_path: Path,
+        job_description: str,
+    ) -> ResumeOptimizationResult:
+        called_paths.append(resume_path)
+        path_exists_during_call.append(resume_path.exists())
+        return original_optimize(
+            adapter,
+            resume_path=resume_path,
+            job_description=job_description,
+        )
+
+    def recording_close(adapter: FakeResumeOptimizerAdapter) -> None:
+        original_close(adapter)
+        closed_adapters.append(adapter)
+
+    monkeypatch.setattr(FakeResumeOptimizerAdapter, "optimize", recording_optimize)
+    monkeypatch.setattr(FakeResumeOptimizerAdapter, "close", recording_close)
+
+    response = post_fake_resume(filename="candidate.pdf", content_type="application/pdf")
+
+    assert response.status_code == 200
+    assert len(called_paths) == 1
+    assert called_paths[0].name == "resume.pdf"
+    assert path_exists_during_call == [True]
+    assert not called_paths[0].exists()
+    assert len(closed_adapters) == 1
+    with pytest.raises(ResumeOptimizerClosedError, match="closed"):
+        closed_adapters[0].optimize(
+            resume_path=called_paths[0],
+            job_description=NORMAL_RESUME_JOB_DESCRIPTION,
+        )
+
+
+def test_fake_resume_adapter_close_is_idempotent() -> None:
+    adapter = FakeResumeOptimizerAdapter()
+
+    adapter.close()
+    adapter.close()
+
+    with pytest.raises(ResumeOptimizerClosedError, match="closed"):
+        adapter.optimize(
+            resume_path=Path("resume.docx"),
+            job_description=NORMAL_RESUME_JOB_DESCRIPTION,
+        )
+
+
+def test_fake_resume_adapter_has_no_external_execution_capability() -> None:
+    source = inspect.getsource(FakeResumeOptimizerAdapter)
+
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "ai_resume_optimizer",
+            "create_resume_optimizer",
+            "DEEPSEEK_API_KEY",
+            "httpx",
+            "requests",
+            "subprocess",
+        )
+    )
+
+
+def test_production_app_does_not_enable_fake_resume_optimization() -> None:
+    app.dependency_overrides.pop(get_resume_optimizer_adapter)
+
+    production_source = inspect.getsource(production_app_module)
+
+    assert get_resume_optimizer_adapter not in app.dependency_overrides
+    assert "dev_server" not in production_source
+    assert "FakeResumeOptimizerAdapter" not in production_source
+    assert "FAKE_CASE_" not in production_source
 
 
 def test_main_uses_local_uvicorn_settings(monkeypatch: pytest.MonkeyPatch) -> None:
