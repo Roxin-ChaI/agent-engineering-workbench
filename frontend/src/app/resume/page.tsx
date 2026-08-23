@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { ResumeOptimizationWorkspace } from "@/components/resume-optimization-workspace";
 
 export default function ResumePage() {
-  return <ComingSoon titleKey="navigation.resume" />;
+  return <ResumeOptimizationWorkspace />;
 }
