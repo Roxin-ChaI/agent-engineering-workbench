@@ -274,7 +274,7 @@ def test_backend_metadata_pins_public_optimizer_and_multipart() -> None:
     dependencies = metadata["project"]["dependencies"]
     expected = (
         "ai-resume-optimizer @ "
-        "git+https://github.com/Roxin-ChaI/ai-resume-optimizer.git@v0.2.0"
+        "git+https://github.com/Roxin-ChaI/ai-resume-optimizer.git@v0.2.1"
     )
 
     assert expected in dependencies
