@@ -19,6 +19,28 @@ class ResumeAssessmentStatus(StrEnum):
     UNSUPPORTED = "unsupported"
 
 
+class ResumeRequirementCategory(StrEnum):
+    CORE_SKILL = "core_skill"
+    PREFERRED_SKILL = "preferred_skill"
+    EXPERIENCE = "experience"
+    RESPONSIBILITY = "responsibility"
+    EDUCATION_OR_QUALIFICATION = "education_or_qualification"
+    KEYWORD = "keyword"
+
+
+class ResumeRequirementImportance(StrEnum):
+    REQUIRED = "required"
+    PREFERRED = "preferred"
+    CONTEXTUAL = "contextual"
+
+
+class ResumeEvidenceKind(StrEnum):
+    PARAGRAPH = "paragraph"
+    HEADING = "heading"
+    LIST_ITEM = "list_item"
+    TABLE_ROW = "table_row"
+
+
 class ResumeSectionType(StrEnum):
     BASIC_INFO = "basic_info"
     SUMMARY = "summary"
@@ -30,12 +52,35 @@ class ResumeSectionType(StrEnum):
     OTHER = "other"
 
 
+class ResumeRequirementReference(_ImmutableResumeContract):
+    requirement_id: str
+    description: str
+    category: ResumeRequirementCategory
+    importance: ResumeRequirementImportance
+    source_excerpt: str
+
+
+class ResumeEvidenceSectionReference(_ImmutableResumeContract):
+    section_type: ResumeSectionType
+    title: str
+
+
+class ResumeRequirementEvidence(_ImmutableResumeContract):
+    source_block_id: str
+    kind: ResumeEvidenceKind
+    location: str
+    excerpt: str
+    sections: tuple[ResumeEvidenceSectionReference, ...]
+
+
 class ResumeRequirementAssessment(_ImmutableResumeContract):
     requirement_id: str
     status: ResumeAssessmentStatus
     source_block_ids: tuple[str, ...]
     reason: str
     suggested_action: str
+    requirement: ResumeRequirementReference | None = None
+    evidence: tuple[ResumeRequirementEvidence, ...] = ()
 
 
 class ResumeMatchAnalysis(_ImmutableResumeContract):

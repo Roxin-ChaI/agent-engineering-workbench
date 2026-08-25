@@ -8,17 +8,20 @@ from ai_resume_optimizer import (  # type: ignore[import-untyped]
     ConfigurationError as PublicConfigurationError,
 )
 from ai_resume_optimizer import (
+    EvidenceSectionReference,
+    MatchAnalysis,
+    OptimizationResult,
+    RequirementAssessment,
+    RequirementEvidence,
+    RequirementReference,
+    ResumeItem,
+    ResumeSection,
+)
+from ai_resume_optimizer import (
     InputError as PublicInputError,
 )
 from ai_resume_optimizer import (
     InputTooLargeError as PublicInputTooLargeError,
-)
-from ai_resume_optimizer import (
-    MatchAnalysis,
-    OptimizationResult,
-    RequirementAssessment,
-    ResumeItem,
-    ResumeSection,
 )
 from ai_resume_optimizer import (
     ModelCallError as PublicModelCallError,
@@ -74,6 +77,27 @@ def make_result() -> OptimizationResult:
         source_block_ids=["block-1"],
         reason="Direct evidence is present.",
         suggested_action="Keep the example.",
+        requirement=RequirementReference(
+            requirement_id="requirement-1",
+            description="Professional Python REST API experience.",
+            category="experience",
+            importance="required",
+            source_excerpt="Required: Python and REST APIs.",
+        ),
+        evidence=[
+            RequirementEvidence(
+                source_block_id="block-1",
+                kind="list_item",
+                location="experience[0].items[0]",
+                excerpt="Built Python APIs.",
+                sections=[
+                    EvidenceSectionReference(
+                        section_type="experience",
+                        title="Experience",
+                    )
+                ],
+            )
+        ],
     )
     analysis = MatchAnalysis(
         overall_rating="高",
@@ -156,6 +180,15 @@ def test_success_maps_result_and_forwards_inputs_exactly_once() -> None:
     assert result == map_resume_optimization_result(runner.result)
     assert result.analysis.overall_evaluation == "Strong match."
     assert result.analysis.main_issues == ("Add scale.",)
+    assessment = result.analysis.assessments[0]
+    assert assessment.requirement_id == "requirement-1"
+    assert assessment.source_block_ids == ("block-1",)
+    assert assessment.requirement is not None
+    assert assessment.requirement.description == (
+        "Professional Python REST API experience."
+    )
+    assert assessment.evidence[0].excerpt == "Built Python APIs."
+    assert assessment.evidence[0].sections[0].title == "Experience"
     assert result.optimized_resume.sections[0].items[0].text == "Built Python APIs."
     assert result.warnings == ("Layout may affect extraction.",)
     assert "output_paths" not in result.model_dump(mode="json")

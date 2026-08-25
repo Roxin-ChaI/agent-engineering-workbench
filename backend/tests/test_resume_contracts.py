@@ -6,9 +6,12 @@ from typing import Literal
 
 import pytest
 from ai_resume_optimizer import (  # type: ignore[import-untyped]
+    EvidenceSectionReference,
     MatchAnalysis,
     OptimizationResult,
     RequirementAssessment,
+    RequirementEvidence,
+    RequirementReference,
     ResumeItem,
     ResumeSection,
 )
@@ -50,6 +53,7 @@ def make_result(
     rating: PublicRating = "高",
     assessment_status: PublicAssessmentStatus = "well_supported",
     section_type: PublicSectionType = "experience",
+    with_provenance: bool = True,
 ) -> OptimizationResult:
     item = ResumeItem(
         text="Built reliable Python APIs.",
@@ -64,12 +68,38 @@ def make_result(
         items=[item],
         source_block_ids=["block-0001"],
     )
+    source_block_ids = (
+        [] if assessment_status == "unsupported" else ["block-0001"]
+    )
+    requirement = RequirementReference(
+        requirement_id="requirement-1",
+        description="Professional experience designing Python REST APIs.",
+        category="experience",
+        importance="required",
+        source_excerpt="Required: Python REST API experience.",
+    )
+    evidence = [
+        RequirementEvidence(
+            source_block_id="block-0001",
+            kind="list_item",
+            location="experience[0].items[0]",
+            excerpt="Built reliable Python APIs.",
+            sections=[
+                EvidenceSectionReference(
+                    section_type="experience",
+                    title="Experience",
+                )
+            ],
+        )
+    ]
     assessment = RequirementAssessment(
         requirement_id="requirement-1",
         status=assessment_status,
-        source_block_ids=([] if assessment_status == "unsupported" else ["block-0001"]),
+        source_block_ids=source_block_ids,
         reason="The resume provides direct evidence.",
         suggested_action="Keep the quantified example.",
+        requirement=(requirement if with_provenance else None),
+        evidence=(evidence if with_provenance and source_block_ids else []),
     )
     analysis = MatchAnalysis(
         overall_rating=rating,
@@ -108,6 +138,29 @@ def test_complete_public_result_maps_without_flattening() -> None:
                     "source_block_ids": ["block-0001"],
                     "reason": "The resume provides direct evidence.",
                     "suggested_action": "Keep the quantified example.",
+                    "requirement": {
+                        "requirement_id": "requirement-1",
+                        "description": (
+                            "Professional experience designing Python REST APIs."
+                        ),
+                        "category": "experience",
+                        "importance": "required",
+                        "source_excerpt": "Required: Python REST API experience.",
+                    },
+                    "evidence": [
+                        {
+                            "source_block_id": "block-0001",
+                            "kind": "list_item",
+                            "location": "experience[0].items[0]",
+                            "excerpt": "Built reliable Python APIs.",
+                            "sections": [
+                                {
+                                    "section_type": "experience",
+                                    "title": "Experience",
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
             "main_issues": ["Clarify the scale of the API."],
@@ -144,6 +197,17 @@ def test_workbench_result_excludes_output_paths() -> None:
     serialized = map_resume_optimization_result(make_result()).model_dump(mode="json")
 
     assert "output_paths" not in serialized
+
+
+def test_legacy_public_result_without_provenance_still_maps() -> None:
+    assessment = map_resume_optimization_result(
+        make_result(with_provenance=False)
+    ).analysis.assessments[0]
+
+    assert assessment.requirement_id == "requirement-1"
+    assert assessment.source_block_ids == ("block-0001",)
+    assert assessment.requirement is None
+    assert assessment.evidence == ()
 
 
 @pytest.mark.parametrize(
@@ -213,6 +277,10 @@ def test_all_public_section_types_map(external: PublicSectionType) -> None:
         ("rating", "unknown-rating"),
         ("assessment", "unknown-assessment"),
         ("section", "unknown-section"),
+        ("requirement-category", "unknown-category"),
+        ("requirement-importance", "unknown-importance"),
+        ("evidence-kind", "unknown-kind"),
+        ("evidence-section", "unknown-evidence-section"),
     ),
 )
 def test_unknown_external_enum_values_fail_closed(
@@ -239,7 +307,7 @@ def test_unknown_external_enum_values_fail_closed(
                 )
             }
         )
-    else:
+    elif field == "section":
         section = result.optimized_resume.sections[0].model_copy(
             update={"section_type": unknown}
         )
@@ -250,8 +318,63 @@ def test_unknown_external_enum_values_fail_closed(
                 )
             }
         )
+    else:
+        assessment = result.analysis.assessments[0]
+        if field == "requirement-category":
+            requirement = assessment.requirement.model_copy(
+                update={"category": unknown}
+            )
+            assessment = assessment.model_copy(update={"requirement": requirement})
+        elif field == "requirement-importance":
+            requirement = assessment.requirement.model_copy(
+                update={"importance": unknown}
+            )
+            assessment = assessment.model_copy(update={"requirement": requirement})
+        else:
+            evidence = assessment.evidence[0]
+            if field == "evidence-kind":
+                evidence = evidence.model_copy(update={"kind": unknown})
+            else:
+                evidence_section = evidence.sections[0].model_copy(
+                    update={"section_type": unknown}
+                )
+                evidence = evidence.model_copy(update={"sections": [evidence_section]})
+            assessment = assessment.model_copy(update={"evidence": [evidence]})
+        result = result.model_copy(
+            update={
+                "analysis": result.analysis.model_copy(
+                    update={"assessments": [assessment]}
+                )
+            }
+        )
 
     with pytest.raises(ResumeOptimizationContractError, match="Unknown"):
+        map_resume_optimization_result(result)
+
+
+@pytest.mark.parametrize("mismatch", ("requirement", "evidence"))
+def test_misaligned_public_provenance_fails_closed(mismatch: str) -> None:
+    result = make_result()
+    assessment = result.analysis.assessments[0]
+    if mismatch == "requirement":
+        requirement = assessment.requirement.model_copy(
+            update={"requirement_id": "other-requirement"}
+        )
+        assessment = assessment.model_copy(update={"requirement": requirement})
+    else:
+        evidence = assessment.evidence[0].model_copy(
+            update={"source_block_id": "other-block"}
+        )
+        assessment = assessment.model_copy(update={"evidence": [evidence]})
+    result = result.model_copy(
+        update={
+            "analysis": result.analysis.model_copy(
+                update={"assessments": [assessment]}
+            )
+        }
+    )
+
+    with pytest.raises(ResumeOptimizationContractError, match="does not match"):
         map_resume_optimization_result(result)
 
 

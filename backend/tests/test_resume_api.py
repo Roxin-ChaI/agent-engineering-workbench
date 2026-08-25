@@ -22,11 +22,19 @@ from agent_engineering_workbench.config import Settings
 from agent_engineering_workbench.dependencies import get_resume_optimizer_adapter
 from agent_engineering_workbench.resume_contracts import (
     OptimizedResume,
+    ResumeAssessmentStatus,
+    ResumeEvidenceKind,
+    ResumeEvidenceSectionReference,
     ResumeMatchAnalysis,
     ResumeMatchRating,
     ResumeOptimizationItem,
     ResumeOptimizationResult,
     ResumeOptimizationSection,
+    ResumeRequirementAssessment,
+    ResumeRequirementCategory,
+    ResumeRequirementEvidence,
+    ResumeRequirementImportance,
+    ResumeRequirementReference,
     ResumeSectionType,
 )
 from agent_engineering_workbench.resume_errors import (
@@ -61,7 +69,36 @@ def make_result() -> ResumeOptimizationResult:
         analysis=ResumeMatchAnalysis(
             overall_rating=ResumeMatchRating.HIGH,
             overall_evaluation="Strong match.",
-            assessments=(),
+            assessments=(
+                ResumeRequirementAssessment(
+                    requirement_id="requirement-1",
+                    status=ResumeAssessmentStatus.WELL_SUPPORTED,
+                    source_block_ids=("block-1",),
+                    reason="Direct evidence is present.",
+                    suggested_action="Keep the example.",
+                    requirement=ResumeRequirementReference(
+                        requirement_id="requirement-1",
+                        description="Professional Python REST API experience.",
+                        category=ResumeRequirementCategory.EXPERIENCE,
+                        importance=ResumeRequirementImportance.REQUIRED,
+                        source_excerpt="Required: Python and REST APIs.",
+                    ),
+                    evidence=(
+                        ResumeRequirementEvidence(
+                            source_block_id="block-1",
+                            kind=ResumeEvidenceKind.LIST_ITEM,
+                            location="experience[0].items[0]",
+                            excerpt="Built Python APIs.",
+                            sections=(
+                                ResumeEvidenceSectionReference(
+                                    section_type=ResumeSectionType.EXPERIENCE,
+                                    title="Experience",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
             main_issues=("Add scale.",),
             section_suggestions=("Lead with experience.",),
             keyword_suggestions=("REST API",),
@@ -164,6 +201,15 @@ def test_docx_upload_returns_workbench_result_and_cleans_temp_file() -> None:
     assert not resume_path.exists()
     payload = response.json()
     assert payload == make_result().model_dump(mode="json")
+    validated = ResumeOptimizationResult.model_validate(payload)
+    assessment = validated.analysis.assessments[0]
+    assert assessment.requirement is not None
+    assert assessment.requirement.description == (
+        "Professional Python REST API experience."
+    )
+    assert assessment.evidence[0].excerpt == "Built Python APIs."
+    assert assessment.requirement_id == "requirement-1"
+    assert assessment.source_block_ids == ("block-1",)
     assert "output_paths" not in payload
     assert "temporary_path" not in payload
 
