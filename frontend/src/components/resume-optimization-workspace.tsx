@@ -6,8 +6,11 @@ import { usePreferences } from "@/components/preferences-provider";
 import { optimizeResume } from "@/lib/api";
 import type {
   ResumeAssessmentStatus,
+  ResumeEvidenceKind,
   ResumeMatchRating,
   ResumeOptimizationResult,
+  ResumeRequirementEvidence,
+  ResumeRequirementImportance,
   ResumeSectionType,
 } from "@/lib/contracts";
 import type { TranslationKey } from "@/lib/i18n";
@@ -38,6 +41,22 @@ const assessmentStyles: Record<ResumeAssessmentStatus, string> = {
   well_supported: "status-completed",
   underrepresented: "status-stopped",
   unsupported: "status-failed",
+};
+
+const importanceLabelKeys: Record<
+  ResumeRequirementImportance,
+  TranslationKey
+> = {
+  required: "resume.importanceRequired",
+  preferred: "resume.importancePreferred",
+  contextual: "resume.importanceContextual",
+};
+
+const evidenceKindLabelKeys: Record<ResumeEvidenceKind, TranslationKey> = {
+  paragraph: "resume.evidenceKindParagraph",
+  heading: "resume.evidenceKindHeading",
+  list_item: "resume.evidenceKindListItem",
+  table_row: "resume.evidenceKindTableRow",
 };
 
 const sectionLabelKeys: Record<ResumeSectionType, TranslationKey> = {
@@ -114,6 +133,51 @@ function StringListPanel({
         <p className="text-muted mt-4 text-sm">{t(emptyKey)}</p>
       )}
     </section>
+  );
+}
+
+function RequirementEvidenceList({
+  evidence,
+}: {
+  evidence: ResumeRequirementEvidence[];
+}) {
+  const { t } = usePreferences();
+
+  if (!evidence.length) {
+    return <p className="text-muted mt-2 text-sm">{t("resume.noEvidence")}</p>;
+  }
+
+  return (
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      {evidence.map((item, index) => {
+        const sectionLabels = item.sections.map((section) => {
+          const title = section.title.trim();
+          return title || t(sectionLabelKeys[section.section_type]);
+        });
+        const hasSection = sectionLabels.length > 0;
+
+        return (
+          <article
+            key={`${index}-${item.source_block_id}`}
+            className="rounded-md border p-3 [border-color:var(--border)]"
+          >
+            <h4 className="text-primary break-words text-sm font-semibold">
+              {hasSection
+                ? sectionLabels.join(" · ")
+                : t(evidenceKindLabelKeys[item.kind])}
+            </h4>
+            {!hasSection && item.location.trim() ? (
+              <p className="text-muted mt-1 break-words text-xs">
+                {item.location}
+              </p>
+            ) : null}
+            <blockquote className="text-secondary mt-2 whitespace-pre-wrap break-words border-l-2 pl-3 text-sm leading-6 [border-color:var(--accent)]">
+              {item.excerpt}
+            </blockquote>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -322,15 +386,43 @@ export function ResumeOptimizationWorkspace() {
                         <p className="text-muted text-xs">
                           {t("resume.requirement")}
                         </p>
-                        <p className="text-primary mt-1 break-words font-mono text-sm font-semibold">
-                          {assessment.requirement_id}
-                        </p>
+                        {assessment.requirement ? (
+                          <h3 className="text-primary mt-1 break-words text-base font-semibold leading-6">
+                            {assessment.requirement.description}
+                          </h3>
+                        ) : (
+                          <div className="mt-1">
+                            <p className="text-muted text-xs">
+                              {t("resume.legacyRequirement")}
+                            </p>
+                            <p className="text-secondary mt-1 break-words font-mono text-xs">
+                              {assessment.requirement_id}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <span
-                        className={`rounded-md border px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${assessmentStyles[assessment.status]}`}
-                      >
-                        {t(assessmentLabelKeys[assessment.status])}
-                      </span>
+                      <dl className="flex flex-wrap gap-2">
+                        <div>
+                          <dt className="sr-only">{t("resume.matchStatus")}</dt>
+                          <dd
+                            className={`rounded-md border px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider ${assessmentStyles[assessment.status]}`}
+                          >
+                            {t("resume.matchStatus")}: {t(assessmentLabelKeys[assessment.status])}
+                          </dd>
+                        </div>
+                        {assessment.requirement ? (
+                          <div>
+                            <dt className="sr-only">{t("resume.importance")}</dt>
+                            <dd className="status-running rounded-md border px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider">
+                              {t("resume.importance")}: {t(
+                                importanceLabelKeys[
+                                  assessment.requirement.importance
+                                ],
+                              )}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
                     </div>
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       <div>
@@ -352,13 +444,9 @@ export function ResumeOptimizationWorkspace() {
                     </div>
                     <div className="mt-4">
                       <h3 className="text-primary text-xs font-semibold uppercase tracking-wider">
-                        {t("resume.sourceBlocks")}
+                        {t("resume.evidence")}
                       </h3>
-                      <p className="text-muted mt-2 break-words font-mono text-xs leading-5">
-                        {assessment.source_block_ids.length
-                          ? assessment.source_block_ids.join(", ")
-                          : t("resume.noSourceBlocks")}
-                      </p>
+                      <RequirementEvidenceList evidence={assessment.evidence ?? []} />
                     </div>
                   </li>
                 ))}
@@ -418,11 +506,6 @@ export function ResumeOptimizationWorkspace() {
                     <h3 className="text-primary mt-2 break-words text-base font-semibold">
                       {section.title}
                     </h3>
-                    <p className="text-muted mt-2 break-words font-mono text-xs leading-5">
-                      {t("resume.sourceBlocks")}: {section.source_block_ids.length
-                        ? section.source_block_ids.join(", ")
-                        : t("resume.noSourceBlocks")}
-                    </p>
                     {section.items.length ? (
                       <ol className="source-list mt-4">
                         {section.items.map((item, itemIndex) => (
@@ -433,28 +516,6 @@ export function ResumeOptimizationWorkspace() {
                             <p className="text-secondary whitespace-pre-wrap break-words text-sm leading-7">
                               {item.text}
                             </p>
-                            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <div className="min-w-0">
-                                <dt className="text-muted text-xs">
-                                  {t("resume.sourceBlocks")}
-                                </dt>
-                                <dd className="text-muted mt-1 break-words font-mono text-xs leading-5">
-                                  {item.source_block_ids.length
-                                    ? item.source_block_ids.join(", ")
-                                    : t("resume.noSourceBlocks")}
-                                </dd>
-                              </div>
-                              <div className="min-w-0">
-                                <dt className="text-muted text-xs">
-                                  {t("resume.relatedRequirements")}
-                                </dt>
-                                <dd className="text-muted mt-1 break-words font-mono text-xs leading-5">
-                                  {item.related_requirement_ids.length
-                                    ? item.related_requirement_ids.join(", ")
-                                    : t("resume.noRelatedRequirements")}
-                                </dd>
-                              </div>
-                            </dl>
                             {item.needs_review || item.review_note ? (
                               <div className="status-stopped mt-3 rounded-md border p-3">
                                 <p className="font-mono text-[10px] uppercase tracking-wider">
