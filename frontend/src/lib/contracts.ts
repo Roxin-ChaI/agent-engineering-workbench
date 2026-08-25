@@ -136,6 +136,25 @@ export type ResumeAssessmentStatus =
   | "underrepresented"
   | "unsupported";
 
+export type ResumeRequirementCategory =
+  | "core_skill"
+  | "preferred_skill"
+  | "experience"
+  | "responsibility"
+  | "education_or_qualification"
+  | "keyword";
+
+export type ResumeRequirementImportance =
+  | "required"
+  | "preferred"
+  | "contextual";
+
+export type ResumeEvidenceKind =
+  | "paragraph"
+  | "heading"
+  | "list_item"
+  | "table_row";
+
 export type ResumeSectionType =
   | "basic_info"
   | "summary"
@@ -146,12 +165,35 @@ export type ResumeSectionType =
   | "certifications"
   | "other";
 
+export interface ResumeRequirementReference {
+  requirement_id: string;
+  description: string;
+  category: ResumeRequirementCategory;
+  importance: ResumeRequirementImportance;
+  source_excerpt: string;
+}
+
+export interface ResumeEvidenceSectionReference {
+  section_type: ResumeSectionType;
+  title: string;
+}
+
+export interface ResumeRequirementEvidence {
+  source_block_id: string;
+  kind: ResumeEvidenceKind;
+  location: string;
+  excerpt: string;
+  sections: ResumeEvidenceSectionReference[];
+}
+
 export interface ResumeRequirementAssessment {
   requirement_id: string;
   status: ResumeAssessmentStatus;
   source_block_ids: string[];
   reason: string;
   suggested_action: string;
+  requirement?: ResumeRequirementReference | null;
+  evidence?: ResumeRequirementEvidence[];
 }
 
 export interface ResumeMatchAnalysis {
