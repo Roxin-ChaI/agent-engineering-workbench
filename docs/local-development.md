@@ -8,7 +8,7 @@
 - PostgreSQL with pgvector and pre-indexed PKRA data only for real Knowledge Research
 
 Context Lab itself requires no API key, database, Redis, DDGS, model provider, or external network call.
-Real GitHub Review requires a DeepSeek API key but no GitHub token.
+Real GitHub Review requires a DeepSeek API key but no GitHub token. Real Resume Optimization also requires a DeepSeek API key.
 
 ## Standard Installation
 
@@ -18,6 +18,7 @@ Backend package metadata pins all integrations to stable Git tags:
 - `production-knowledge-research-agent[e2e]` v0.4.0
 - `context-window-compressor` v0.1.0
 - `ai-github-reviewer` v0.2.0
+- `ai-resume-optimizer` v0.2.1
 
 Install Backend and development tools from the project root:
 
@@ -25,7 +26,7 @@ Install Backend and development tools from the project root:
 .venv/bin/python -m pip install -e './backend[dev]'
 ```
 
-Normal installation does not require local WRA, PKRA, CWC, or AI GitHub Reviewer checkouts. Formal dependencies use fixed Git tags, not local paths or floating branches.
+Normal installation does not require local WRA, PKRA, CWC, AI GitHub Reviewer, or AI Resume Optimizer checkouts. Formal dependencies use fixed Git tags, not local paths or floating branches.
 
 ## Optional Editable Overrides
 
@@ -36,6 +37,7 @@ Use editable overrides only when developing Workbench and an integrated project 
 .venv/bin/python -m pip install -e '<path-to-pkra>[e2e]'
 .venv/bin/python -m pip install -e '<path-to-cwc>'
 .venv/bin/python -m pip install -e '<path-to-ai-github-reviewer>'
+.venv/bin/python -m pip install -e '<path-to-ai-resume-optimizer>'
 ```
 
 These commands make the current environment use local source. They are not formal dependency declarations and must not be added to `pyproject.toml`.
@@ -59,9 +61,9 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:3000/context` or `http://localhost:3000/github`.
+Open `http://localhost:3000/context`, `http://localhost:3000/github`, or `http://localhost:3000/resume`.
 
-The dev server provides deterministic Fake Web, Knowledge, Context, and GitHub Review adapters. Fake Context results are suitable for Before / After UI checks without executing CWC:
+The dev server provides deterministic Fake Web, Knowledge, Context, GitHub Review, and Resume adapters. Fake Context results are suitable for Before / After UI checks without executing CWC:
 
 - `no_compression`: `120 → 120`
 - `truncation`: `120 → 48`
@@ -143,12 +145,21 @@ cd backend
 
 Start the Frontend, open `http://localhost:3000/github`, and submit a public GitHub Pull Request URL. No `GITHUB_TOKEN` is required or supported. The integration uses anonymous GitHub REST GET only and never comments, submits a review, approves, requests changes, merges, closes, mutates a repository, or executes PR code. Real Review calls DeepSeek and may incur API costs; never commit the key.
 
+## Real Resume Optimization
+
+Set `DEEPSEEK_API_KEY`, start `agent_engineering_workbench.app:app`, and open `http://localhost:3000/resume`. Upload a PDF or DOCX resume and provide job-description text. The production chain uses AI Resume Optimizer v0.2.1's public runner; it does not invoke the CLI or parse exported files.
+
+Requirement and evidence provenance is deterministic. The UI displays requirement description, importance, status, section-aware evidence excerpts, and hides internal requirement/source-block IDs. Resume contents are sent to the configured model for the request; the Workbench removes its temporary upload when the request ends and does not persist it.
+
 ## Validation Notes
 
 The Context Lab Fake GUI, real no-op compression, real `114 → 69` truncation, and TokenBudgetError → HTTP 422 paths have been manually verified. Execution duration varies per run and is not a fixed baseline.
 
 Fake GitHub Review GUI scenarios for PR 42, PR 43, PR 500, invalid URL, and empty input have passed along with bilingual UI, themes, responsive layout, and a clean console. Real REST/GUI validation against public PR `openai/openai-python#3357` passed with structured metadata, two Findings, Assessment, Test Gaps, Maintainability, Markdown Review, a single HTTP 200 business POST, a clean console, and no GitHub writes.
 
+Real Resume GUI validation passed through the production app with one HTTP 200 request. Requirement descriptions, importance/status, section-aware evidence excerpts, hidden machine IDs, bilingual UI, Light/Dark themes, responsive layout, and a clean console were verified.
+
 The v0.3.0 release baseline includes a successful Next.js production build.
 The v0.4.0 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/github` route.
+The v0.4.1 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/resume` route.
 Run `cd frontend && npm run build` to repeat this local verification.

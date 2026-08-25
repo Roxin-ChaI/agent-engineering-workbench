@@ -210,7 +210,7 @@ def test_health_endpoint_behavior_is_unchanged() -> None:
     response = TestClient(app).get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.4.0"}
+    assert response.json() == {"status": "ok", "version": "0.4.1"}
 
 
 def test_completed_knowledge_stream_replays_trace_in_order() -> None:

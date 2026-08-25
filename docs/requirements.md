@@ -10,8 +10,9 @@ Version history:
 - v0.2.0: PKRA Knowledge Research integration while retaining WRA.
 - v0.3.0: Context Lab and CWC integration while retaining both Research workspaces.
 - v0.4.0: Read-only GitHub Review integration while retaining all prior workspaces.
+- v0.4.1: Human-readable Resume requirement and evidence provenance using AI Resume Optimizer v0.2.1.
 
-## v0.4.0 Scope
+## v0.4.1 Scope
 
 ### Backend
 
@@ -30,6 +31,11 @@ Version history:
 - Categorized invalid-input, upstream/protocol, and safe internal error boundaries.
 - Request-scoped public Reviewer runner lifecycle with guaranteed close.
 - Deterministic Fake GitHub Review dependency override for local GUI integration.
+- Workbench-owned Resume request/result DTOs with additive requirement and evidence provenance.
+- `ResumeOptimizerAdapter` using AI Resume Optimizer v0.2.1 public Python APIs.
+- Formal Resume Optimizer dependency fixed to Git tag `v0.2.1`.
+- `POST /api/resume/optimize` with request-scoped runner lifecycle and temporary-file cleanup.
+- Legacy Resume results without provenance remain compatible.
 
 ### Frontend
 
@@ -48,6 +54,10 @@ Version history:
 - PR Overview, Summary, Findings, Test Gaps, Maintainability, Assessment, and Markdown Review presentation.
 - Finding severity, file path, location, issue, evidence, and recommendation.
 - Empty Findings and categorized error states, without any GitHub write controls.
+- Dedicated Resume TypeScript contract and multipart REST client.
+- `/resume` workspace with structured analysis and optimized-resume presentation.
+- Human-readable requirement description, importance, and match status.
+- Section-aware evidence excerpts with machine IDs hidden from the normal UI.
 
 ### Integrated Projects
 
@@ -55,6 +65,7 @@ Version history:
 - `production-knowledge-research-agent` v0.4.0.
 - `context-window-compressor` v0.1.0.
 - `ai-github-reviewer` v0.2.0.
+- `ai-resume-optimizer` v0.2.1.
 
 All projects remain independent repositories. Workbench uses public Python APIs and adapter boundaries; it does not copy source or invoke project CLIs through subprocesses.
 
@@ -90,17 +101,25 @@ The integration supports public PRs only and is read-only: anonymous GitHub REST
 
 Invalid PR URLs return HTTP 422, categorized upstream/review protocol failures return HTTP 502, and unknown internal failures return a safe HTTP 500 response. GitHub Review uses REST only.
 
+## Resume Provenance Contract
+
+Resume Optimization accepts one PDF or DOCX resume and a job-description string. `ResumeOptimizerAdapter` invokes the AI Resume Optimizer v0.2.1 public runner and maps its structured result into Workbench-owned DTOs without importing private modules or parsing exported files.
+
+Each requirement assessment preserves legacy `requirement_id` and `source_block_ids` while optionally adding a human-readable requirement reference and ordered evidence records. Evidence contains kind, location, source excerpt, and section references. It is mapped deterministically from parsed `SourceBlock` data, not generated, inferred, fuzzy-matched, or reconstructed from the optimized resume. The UI displays requirement descriptions and evidence excerpts while keeping machine IDs hidden by default.
+
 ## Validation Baseline
 
-- 225 Backend tests pass.
+- 311 Backend tests pass.
 - Ruff, mypy, and pip check pass.
 - Frontend ESLint and TypeScript checks pass.
 - Fake Context GUI covers all three strategies, invalid JSON blocking before POST, bilingual UI, themes, and a clean browser console.
 - Real Context REST/GUI covers no-op `45 → 45`, actual `114 → 69` truncation, TokenBudgetError → HTTP 422, and a clean browser console.
 - The final v0.3.0 Next.js production build has passed release verification.
 - The v0.4.0 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/github` route.
+- The v0.4.1 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/resume` route.
 - Fake GitHub Review GUI covers PR 42, PR 43 empty Findings, PR 500 → HTTP 502, invalid URL → HTTP 422, empty-input blocking, bilingual UI, themes, responsive layout, and a clean console.
 - Real GitHub Review REST/GUI against public PR `openai/openai-python#3357` covers structured metadata, two Findings, Assessment, Test Gaps, Maintainability, Markdown Review, one HTTP 200 business POST, a clean console, and no GitHub writes.
+- Real Resume GUI validation covers one production HTTP 200 request, requirement description/importance/status, section-aware evidence excerpts, hidden machine IDs, bilingual UI, themes, responsive layout, and a clean console.
 
 ## Non Goals
 
