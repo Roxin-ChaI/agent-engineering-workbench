@@ -19,10 +19,12 @@ export type Theme = "dark" | "light";
 
 const LANGUAGE_STORAGE_KEY = "aew-language";
 const THEME_STORAGE_KEY = "aew-theme";
+const SIDEBAR_STORAGE_KEY = "aew-sidebar-collapsed";
 
 type Preferences = {
   language: Language;
   theme: Theme;
+  sidebarCollapsed: boolean;
 };
 
 type PreferencesContextValue = Preferences & {
@@ -30,12 +32,14 @@ type PreferencesContextValue = Preferences & {
   toggleLanguage: () => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  toggleSidebar: () => void;
   t: (key: TranslationKey) => string;
 };
 
 const defaultPreferences: Preferences = {
   language: "en",
   theme: "dark",
+  sidebarCollapsed: false,
 };
 
 let preferences = defaultPreferences;
@@ -59,6 +63,10 @@ function readTheme(): Theme {
     : "light";
 }
 
+function readSidebarCollapsed(): boolean {
+  return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+}
+
 function applyDocumentPreferences(nextPreferences: Preferences): void {
   document.documentElement.dataset.theme = nextPreferences.theme;
   document.documentElement.lang = nextPreferences.language;
@@ -74,6 +82,7 @@ function initializePreferences(): void {
     preferences = {
       language: readLanguage(),
       theme: readTheme(),
+      sidebarCollapsed: readSidebarCollapsed(),
     };
   } catch {
     preferences = {
@@ -81,6 +90,7 @@ function initializePreferences(): void {
       theme: window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light",
+      sidebarCollapsed: false,
     };
   }
   applyDocumentPreferences(preferences);
@@ -110,6 +120,10 @@ function updatePreferences(nextPreferences: Preferences): void {
       preferences.language,
     );
     window.localStorage.setItem(THEME_STORAGE_KEY, preferences.theme);
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      String(preferences.sidebarCollapsed),
+    );
   } catch {
     // Preferences remain active for this session when storage is unavailable.
   }
@@ -143,6 +157,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       theme: preferences.theme === "dark" ? "light" : "dark",
     });
   }, []);
+  const toggleSidebar = useCallback(() => {
+    updatePreferences({
+      ...preferences,
+      sidebarCollapsed: !preferences.sidebarCollapsed,
+    });
+  }, []);
   const t = useCallback(
     (key: TranslationKey) => translate(current.language, key),
     [current.language],
@@ -155,9 +175,18 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toggleLanguage,
       setTheme,
       toggleTheme,
+      toggleSidebar,
       t,
     }),
-    [current, setLanguage, setTheme, t, toggleLanguage, toggleTheme],
+    [
+      current,
+      setLanguage,
+      setTheme,
+      t,
+      toggleLanguage,
+      toggleSidebar,
+      toggleTheme,
+    ],
   );
 
   return (
