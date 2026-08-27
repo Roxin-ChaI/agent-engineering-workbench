@@ -17,6 +17,7 @@ dependencies = [
     "context-window-compressor @ git+https://github.com/Roxin-ChaI/context-window-compressor.git@v0.1.0",
     "ai-github-reviewer @ git+https://github.com/Roxin-ChaI/ai-github-reviewer.git@v0.2.0",
     "ai-resume-optimizer @ git+https://github.com/Roxin-ChaI/ai-resume-optimizer.git@v0.2.1",
+    "prompt-engineering-workbench @ git+https://github.com/Roxin-ChaI/prompt-engineering-workbench.git@v0.2.0",
     "python-multipart",
 ]
 
