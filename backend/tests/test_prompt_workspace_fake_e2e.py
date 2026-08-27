@@ -23,6 +23,7 @@ PROMPT_WORKSPACE_SOURCE = (
 FRONTEND_API_SOURCE = REPOSITORY_ROOT / "frontend/src/lib/api.ts"
 FRONTEND_CONTRACT_SOURCE = REPOSITORY_ROOT / "frontend/src/lib/contracts.ts"
 I18N_SOURCE = REPOSITORY_ROOT / "frontend/src/lib/i18n.ts"
+GLOBAL_STYLES_SOURCE = REPOSITORY_ROOT / "frontend/src/app/globals.css"
 
 
 def prompt_payload(
@@ -217,6 +218,61 @@ def test_prompt_workspace_fake_e2e_frontend_guards_before_request() -> None:
     assert source.index("inFlight.current = true") < request_call
     assert "disabled={loading}" in source
     assert 't("prompt.running")' in source
+
+
+def test_prompt_workspace_placeholders_are_not_request_values() -> None:
+    source = PROMPT_WORKSPACE_SOURCE.read_text()
+    i18n_source = I18N_SOURCE.read_text()
+
+    assert all(
+        declaration in source
+        for declaration in (
+            'const [systemPrompt, setSystemPrompt] = useState("")',
+            'const [wikiRules, setWikiRules] = useState("")',
+            'const [taskId, setTaskId] = useState("")',
+            'const [instruction, setInstruction] = useState("")',
+        )
+    )
+    assert all(
+        field in source
+        for field in (
+            "system_prompt: normalizedSystemPrompt",
+            "wiki_rules: normalizedWikiRules",
+            "task_id: normalizedTaskId",
+            "instruction: normalizedInstruction",
+            "required_response_substrings: splitLines(requiredSubstrings)",
+            "forbidden_response_substrings: splitLines(forbiddenSubstrings)",
+            "required_tool_names: normalizedRequiredTools",
+            "forbidden_tool_names: splitLines(forbiddenTools)",
+        )
+    )
+    assert "WORKBENCH_REAL_E2E" not in source
+    assert "real-prompt-e2e" not in source
+    assert all(
+        i18n_source.count(f'"{key}"') == 2
+        for key in (
+            "prompt.systemPromptPlaceholder",
+            "prompt.wikiRulesPlaceholder",
+            "prompt.taskIdPlaceholder",
+            "prompt.instructionPlaceholder",
+            "prompt.exactResponsePlaceholder",
+            "prompt.requiredSubstringsPlaceholder",
+            "prompt.forbiddenSubstringsPlaceholder",
+            "prompt.requiredToolsPlaceholder",
+            "prompt.forbiddenToolsPlaceholder",
+        )
+    )
+
+
+def test_prompt_workspace_placeholders_hide_on_focus() -> None:
+    source = PROMPT_WORKSPACE_SOURCE.read_text()
+    styles = GLOBAL_STYLES_SOURCE.read_text()
+
+    assert source.count('className="prompt-placeholder ') == 6
+    assert ".prompt-placeholder::placeholder" in styles
+    assert ".prompt-placeholder:focus::placeholder" in styles
+    assert "opacity: 0.65" in styles
+    assert "opacity: 0" in styles
 
 
 def test_prompt_workspace_fake_e2e_rendering_i18n_and_responsive_boundaries(

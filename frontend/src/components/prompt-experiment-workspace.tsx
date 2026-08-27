@@ -73,12 +73,14 @@ function CriteriaListField({
   id,
   label,
   hint,
+  placeholder,
   value,
   onChange,
 }: {
   id: string;
   label: string;
   hint: string;
+  placeholder: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -91,9 +93,10 @@ function CriteriaListField({
       <textarea
         id={id}
         rows={3}
+        placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="workbench-input mt-2 w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-5 outline-none"
+        className="prompt-placeholder workbench-input mt-2 w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-5 outline-none"
       />
     </div>
   );
@@ -101,18 +104,12 @@ function CriteriaListField({
 
 export function PromptExperimentWorkspace() {
   const { t } = usePreferences();
-  const [systemPrompt, setSystemPrompt] = useState(() =>
-    t("prompt.defaultSystemPrompt"),
-  );
-  const [wikiRules, setWikiRules] = useState(() =>
-    t("prompt.defaultWikiRule"),
-  );
-  const [taskId, setTaskId] = useState("prompt-workspace-task");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [wikiRules, setWikiRules] = useState("");
+  const [taskId, setTaskId] = useState("");
   const [environment, setEnvironment] =
     useState<PromptExperimentEnvironment>("airline");
-  const [instruction, setInstruction] = useState(() =>
-    t("prompt.defaultInstruction"),
-  );
+  const [instruction, setInstruction] = useState("");
   const [requireFinalResponse, setRequireFinalResponse] = useState(true);
   const [exactResponse, setExactResponse] = useState("");
   const [requiredSubstrings, setRequiredSubstrings] = useState("");
@@ -248,9 +245,10 @@ export function PromptExperimentWorkspace() {
             <textarea
               id="prompt-system"
               rows={7}
+              placeholder={t("prompt.systemPromptPlaceholder")}
               value={systemPrompt}
               onChange={(event) => setSystemPrompt(event.target.value)}
-              className="workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 text-sm leading-6 outline-none"
+              className="prompt-placeholder workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 text-sm leading-6 outline-none"
             />
 
             <label
@@ -265,9 +263,10 @@ export function PromptExperimentWorkspace() {
             <textarea
               id="prompt-wiki-rules"
               rows={5}
+              placeholder={t("prompt.wikiRulesPlaceholder")}
               value={wikiRules}
               onChange={(event) => setWikiRules(event.target.value)}
-              className="workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 font-mono text-xs leading-6 outline-none"
+              className="prompt-placeholder workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 font-mono text-xs leading-6 outline-none"
             />
           </section>
 
@@ -287,9 +286,10 @@ export function PromptExperimentWorkspace() {
                 <input
                   id="prompt-task-id"
                   type="text"
+                  placeholder={t("prompt.taskIdPlaceholder")}
                   value={taskId}
                   onChange={(event) => setTaskId(event.target.value)}
-                  className="workbench-input mt-2 w-full rounded-md border px-3 py-2 font-mono text-sm outline-none"
+                  className="prompt-placeholder workbench-input mt-2 w-full rounded-md border px-3 py-2 font-mono text-sm outline-none"
                 />
               </div>
               <div>
@@ -329,9 +329,10 @@ export function PromptExperimentWorkspace() {
             <textarea
               id="prompt-instruction"
               rows={7}
+              placeholder={t("prompt.instructionPlaceholder")}
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
-              className="workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 text-sm leading-6 outline-none"
+              className="prompt-placeholder workbench-input mt-2 w-full resize-y rounded-md border px-4 py-3 text-sm leading-6 outline-none"
             />
           </section>
         </div>
@@ -365,15 +366,17 @@ export function PromptExperimentWorkspace() {
               <textarea
                 id="prompt-exact-response"
                 rows={3}
+                placeholder={t("prompt.exactResponsePlaceholder")}
                 value={exactResponse}
                 onChange={(event) => setExactResponse(event.target.value)}
-                className="workbench-input mt-2 w-full resize-y rounded-md border px-3 py-2 text-sm leading-5 outline-none"
+                className="prompt-placeholder workbench-input mt-2 w-full resize-y rounded-md border px-3 py-2 text-sm leading-5 outline-none"
               />
             </div>
             <CriteriaListField
               id="prompt-required-substrings"
               label={t("prompt.requiredSubstrings")}
               hint={t("prompt.onePerLine")}
+              placeholder={t("prompt.requiredSubstringsPlaceholder")}
               value={requiredSubstrings}
               onChange={setRequiredSubstrings}
             />
@@ -381,6 +384,7 @@ export function PromptExperimentWorkspace() {
               id="prompt-forbidden-substrings"
               label={t("prompt.forbiddenSubstrings")}
               hint={t("prompt.onePerLine")}
+              placeholder={t("prompt.forbiddenSubstringsPlaceholder")}
               value={forbiddenSubstrings}
               onChange={setForbiddenSubstrings}
             />
@@ -389,6 +393,7 @@ export function PromptExperimentWorkspace() {
                 id="prompt-required-tools"
                 label={t("prompt.requiredTools")}
                 hint={t("prompt.onePerLine")}
+                placeholder={t("prompt.requiredToolsPlaceholder")}
                 value={requiredTools}
                 onChange={setRequiredTools}
               />
@@ -400,6 +405,7 @@ export function PromptExperimentWorkspace() {
               id="prompt-forbidden-tools"
               label={t("prompt.forbiddenTools")}
               hint={t("prompt.onePerLine")}
+              placeholder={t("prompt.forbiddenToolsPlaceholder")}
               value={forbiddenTools}
               onChange={setForbiddenTools}
             />
