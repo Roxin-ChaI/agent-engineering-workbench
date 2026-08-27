@@ -4,17 +4,18 @@
 
 A modular Web workbench for integrating, running, and inspecting independent AI engineering projects through a unified interface.
 
-## v0.4.1
+## v0.5.0
 
-v0.4.1 provides five workspaces:
+v0.5.0 provides six workspaces:
 
 - Web Research uses [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent) (WRA) v0.2.0.
 - Knowledge Research uses [`production-knowledge-research-agent`](https://github.com/Roxin-ChaI/production-knowledge-research-agent) (PKRA) v0.4.0.
 - Context Lab uses [`context-window-compressor`](https://github.com/Roxin-ChaI/context-window-compressor) (CWC) v0.1.0.
 - GitHub Review uses [`ai-github-reviewer`](https://github.com/Roxin-ChaI/ai-github-reviewer) v0.2.0.
 - Resume Optimization uses [`ai-resume-optimizer`](https://github.com/Roxin-ChaI/ai-resume-optimizer) v0.2.1.
+- Prompt Experiment uses [`prompt-engineering-workbench`](https://github.com/Roxin-ChaI/prompt-engineering-workbench) v0.2.0.
 
-All five projects remain independent repositories. The Workbench integrates their public Python APIs through adapter boundaries; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA, v0.2.0 added PKRA Knowledge Research, v0.3.0 added Context Lab, v0.4.0 added read-only GitHub Review, and v0.4.1 adds human-readable Resume provenance.
+All six projects remain independent repositories. The Workbench integrates their public Python APIs through adapter boundaries; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA, v0.2.0 added PKRA Knowledge Research, v0.3.0 added Context Lab, v0.4.0 added read-only GitHub Review, v0.4.1 added human-readable Resume provenance, and v0.5.0 adds controlled Prompt Experiments.
 
 ## Features
 
@@ -25,6 +26,8 @@ All five projects remain independent repositories. The Workbench integrates thei
 - Estimated token reduction, compression ratio, strategy, and duration Metrics
 - Read-only review of public GitHub Pull Requests with PR Overview, Summary, Findings, Test Gaps, Maintainability, Assessment, and Markdown Review
 - Resume optimization with structured requirement assessments and section-aware evidence provenance
+- Controlled Prompt Experiments with variant selection, deterministic success criteria, structured evaluation, and metrics
+- Collapsible navigation with a persisted expanded or compact layout
 - English and Chinese UI
 - Dark and Light themes with persisted preferences
 - Fake local integration mode and production integrations
@@ -50,8 +53,9 @@ Backend endpoints:
 - `POST /api/context/compress`
 - `POST /api/github/review`
 - `POST /api/resume/optimize`
+- `POST /api/prompts/experiment`
 
-The two Research workspaces offer REST and SSE boundaries. Context Lab, GitHub Review, and Resume Optimization use REST only; none exposes an SSE endpoint.
+The two Research workspaces offer REST and SSE boundaries. Context Lab, GitHub Review, Resume Optimization, and Prompt Experiment use REST only; none exposes an SSE endpoint.
 
 ## Architecture
 
@@ -72,11 +76,15 @@ Browser
       → ResumeOptimizerAdapter
           → AI Resume Optimizer v0.2.1 public runner
           → DeepSeek V4 Flash
+      → PromptExperimentAdapter
+          → Prompt Engineering Workbench v0.2.0 public factory/runner
+          → DeepSeek V4 Flash
+          → deterministic evaluation
   → Workbench-owned result contracts
   → GUI
 ```
 
-Research adapters map public agent results into the Workbench-owned `RunResult` contract. Context Lab, GitHub Review, and Resume Optimization use dedicated Workbench-owned contracts. Their adapters translate public structured results; the Frontend depends only on Workbench TypeScript contracts. The Workbench does not import private project internals.
+Research adapters map public agent results into the Workbench-owned `RunResult` contract. Context Lab, GitHub Review, Resume Optimization, and Prompt Experiment use dedicated Workbench-owned contracts. Their adapters translate public structured results; the Frontend depends only on Workbench TypeScript contracts. The Workbench does not import private project internals.
 
 ## Dependencies
 
@@ -85,7 +93,8 @@ Research adapters map public agent results into the Workbench-owned `RunResult` 
 - CWC is pinned to the stable Git tag `v0.1.0`.
 - AI GitHub Reviewer is pinned to the stable Git tag `v0.2.0`.
 - AI Resume Optimizer is pinned to the stable Git tag `v0.2.1`.
-- Normal installation does not require local WRA, PKRA, CWC, Reviewer, or Resume Optimizer checkouts. Editable installs are optional development overrides only.
+- Prompt Engineering Workbench is pinned to the stable Git tag `v0.2.0`.
+- Normal installation does not require local WRA, PKRA, CWC, Reviewer, Resume Optimizer, or Prompt Engineering Workbench checkouts. Editable installs are optional development overrides only.
 
 ## Context Lab
 
@@ -135,6 +144,14 @@ Resume Optimization displays structured job requirement references and the resum
 
 The provenance comes from AI Resume Optimizer v0.2.1. Evidence is mapped deterministically from the parsed resume `SourceBlock` data while preserving source order. It is not a generated explanation, an inferred source, fuzzy matching, or content reconstructed from the optimized resume. Legacy responses without provenance remain supported through a non-breaking fallback.
 
+## Prompt Experiment Workspace
+
+Prompt Experiment is a browser workspace for one controlled experiment: one `PromptBundle`, one task, and one user-selected variant per request. It supports the six upstream public variants `baseline`, `tone_trump`, `tone_casual`, `wiki_random`, `no_tool_desc`, and `all_ablations`; it does not automatically run a six-way comparison. The GUI exposes only `max_steps` and `seed` as experiment options.
+
+Success criteria support a required final response, an exact response, required or forbidden response substrings, and required or forbidden tool names. The current workspace provides no callable tool handlers, so required-tool criteria fail closed. All criteria passing produces `reward = 1.0` and `completed = true`; any failed criterion produces `reward = 0.0` and `completed = false`. A failed evaluation remains a valid HTTP 200 experiment result, not an HTTP error, semantic-quality score, factuality score, or LLM-as-a-Judge decision.
+
+Production requests use the Prompt Engineering Workbench v0.2.0 public factory. Each request creates a runner, runs it exactly once, and closes it exactly once. The default model is `deepseek-v4-flash`; provider secrets remain on the Backend and are never part of the browser contract.
+
 ## Research Behavior and SSE Semantics
 
 PKRA returns Answer and Metrics through `RunResult`, but its current public result has no lossless activity trace or structured source/evidence URLs. Successful Knowledge runs therefore currently contain `trace = []` and `sources = []`; these are known contract limitations, not execution failures.
@@ -161,23 +178,28 @@ Neither endpoint provides native real-time token/tool streaming.
 - context-window-compressor v0.1.0
 - ai-github-reviewer v0.2.0
 - ai-resume-optimizer v0.2.1
+- prompt-engineering-workbench v0.2.0
 - Anonymous GitHub REST GET for public Pull Requests
 
 ## Quality Baseline
 
-- Backend: 311 tests passed
+- Backend: 423 tests passed
+- Prompt Workspace focused Fake E2E: 10 tests passed
 - Ruff: PASS
 - mypy: PASS
 - pip check: PASS
 - Frontend ESLint: PASS
 - TypeScript: PASS
-- Next.js 16.3.1 production build: PASS (static page generation: PASS; `/resume` included)
+- Frontend static tests: 4 passed
+- Next.js 16.3.1 v0.5.0 production build: MANUAL VERIFICATION REQUIRED (Codex sandbox blocked Turbopack port binding with `EPERM`)
 
 Fake GUI validation covers all three strategies, invalid JSON blocking before POST, bilingual/theme behavior, and a clean browser console. Real REST/GUI validation covers no-op compression (`45 → 45`, zero saved, `compression_applied=false`, HTTP 200), truncation (`114 → 69`, 45 estimated tokens saved, approximately 60.5% ratio, `compressed_message_count=1`, HTTP 200), TokenBudgetError → HTTP 422, and a clean browser console. Duration is measured per run and is not a fixed benchmark.
 
 GitHub Review Fake GUI validation covers PR 42 with two Findings, PR 43 with an empty Findings state, PR 500 → HTTP 502, invalid URL → HTTP 422, empty-input blocking, English/Chinese, Light/Dark, responsive layout, and a clean browser console. Real REST/GUI validation against public PR `openai/openai-python#3357` passed with structured metadata, two Findings, Assessment, Test Gaps, Maintainability, Markdown Review, a single HTTP 200 business POST, a clean console, and no GitHub writes.
 
 Resume Provenance Real GUI validation passed against the production app with one HTTP 200 request: human-readable requirement descriptions, importance/status, section-aware evidence excerpts, hidden machine IDs, English/Chinese, Light/Dark, responsive layout, and a clean console.
+
+Prompt Workspace deterministic Fake E2E covers success, failed criteria, the required-tools guard, variant and request fidelity, input validation, production isolation, and zero DeepSeek calls through pytest/TestClient plus local browser verification. Real Prompt Workspace E2E passed in production mode with `deepseek-v4-flash`: one Prompt POST returned HTTP 200, reward 1.0, completed true, all criteria passed, zero tool calls, a clean console, protected provider secrets, correct request-scoped lifecycle, and verified bilingual/theme/responsive behavior.
 
 ## Known Limitations
 
@@ -188,6 +210,10 @@ Resume Provenance Real GUI validation passed against the production app with one
 - Context Lab currently has no persistence or SSE.
 - PKRA structured Sources/Evidence and Activity Trace are not currently mapped.
 - Research SSE replays available events after synchronous execution; native real-time streaming is unavailable.
+- Prompt Experiment runs one task and one selected variant per request; it has no automatic comparison matrix.
+- Prompt Vault persistence/history and prompt variables/templates are outside the v0.5.0 scope.
+- Prompt Experiment has no arbitrary callable tools; required-tool criteria fail closed.
+- Prompt evaluation is deterministic and binary, with no partial credit or semantic LLM judge.
 
 ## Documentation
 

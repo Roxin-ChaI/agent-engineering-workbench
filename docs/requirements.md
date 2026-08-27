@@ -11,8 +11,9 @@ Version history:
 - v0.3.0: Context Lab and CWC integration while retaining both Research workspaces.
 - v0.4.0: Read-only GitHub Review integration while retaining all prior workspaces.
 - v0.4.1: Human-readable Resume requirement and evidence provenance using AI Resume Optimizer v0.2.1.
+- v0.5.0: Controlled Prompt Experiment workspace using Prompt Engineering Workbench v0.2.0.
 
-## v0.4.1 Scope
+## v0.5.0 Scope
 
 ### Backend
 
@@ -36,6 +37,11 @@ Version history:
 - Formal Resume Optimizer dependency fixed to Git tag `v0.2.1`.
 - `POST /api/resume/optimize` with request-scoped runner lifecycle and temporary-file cleanup.
 - Legacy Resume results without provenance remain compatible.
+- Workbench-owned Prompt Experiment request/result DTOs independent of upstream Python models.
+- `PromptExperimentAdapter` using Prompt Engineering Workbench v0.2.0 public APIs.
+- Formal Prompt Engineering dependency fixed to Git tag `v0.2.0`.
+- `POST /api/prompts/experiment` with request-scoped runner creation, one execution, and guaranteed close.
+- Deterministic Fake Prompt dependency override with zero DeepSeek calls.
 
 ### Frontend
 
@@ -58,6 +64,9 @@ Version history:
 - `/resume` workspace with structured analysis and optimized-resume presentation.
 - Human-readable requirement description, importance, and match status.
 - Section-aware evidence excerpts with machine IDs hidden from the normal UI.
+- `/prompts` workspace with one prompt bundle, one task, one selected variant, deterministic criteria, final response, binary evaluation, and stable step/tool metrics.
+- Six selectable upstream variants without automatic multi-variant comparison.
+- Prompt form examples use placeholder semantics; the shared sidebar supports persisted expanded and compact layouts.
 
 ### Integrated Projects
 
@@ -66,6 +75,7 @@ Version history:
 - `context-window-compressor` v0.1.0.
 - `ai-github-reviewer` v0.2.0.
 - `ai-resume-optimizer` v0.2.1.
+- `prompt-engineering-workbench` v0.2.0.
 
 All projects remain independent repositories. Workbench uses public Python APIs and adapter boundaries; it does not copy source or invoke project CLIs through subprocesses.
 
@@ -107,19 +117,30 @@ Resume Optimization accepts one PDF or DOCX resume and a job-description string.
 
 Each requirement assessment preserves legacy `requirement_id` and `source_block_ids` while optionally adding a human-readable requirement reference and ordered evidence records. Evidence contains kind, location, source excerpt, and section references. It is mapped deterministically from parsed `SourceBlock` data, not generated, inferred, fuzzy-matched, or reconstructed from the optimized resume. The UI displays requirement descriptions and evidence excerpts while keeping machine IDs hidden by default.
 
+## Prompt Experiment Contract
+
+Prompt Experiment accepts one prompt bundle, one task, one selected variant, deterministic success criteria, and only `max_steps`/`seed` options. Supported criteria cover a required final response, exact response, required/forbidden response substrings, and required/forbidden tool names. The current workspace exposes no callable tool handlers, so required-tool criteria fail closed.
+
+All criteria passing yields reward 1.0 and `completed=true`; any failure yields reward 0.0 and `completed=false`. Failed evaluation remains a successful HTTP 200 experiment result. It is not an HTTP failure, semantic/factual quality score, or LLM-as-a-Judge result. Production uses the upstream v0.2.0 public factory with `deepseek-v4-flash`; provider secrets stay outside the browser contract.
+
 ## Validation Baseline
 
-- 311 Backend tests pass.
+- 423 Backend tests pass.
+- 10 focused Prompt Workspace Fake E2E tests pass.
 - Ruff, mypy, and pip check pass.
 - Frontend ESLint and TypeScript checks pass.
+- 4 Frontend sidebar/static tests pass.
 - Fake Context GUI covers all three strategies, invalid JSON blocking before POST, bilingual UI, themes, and a clean browser console.
 - Real Context REST/GUI covers no-op `45 → 45`, actual `114 → 69` truncation, TokenBudgetError → HTTP 422, and a clean browser console.
 - The final v0.3.0 Next.js production build has passed release verification.
 - The v0.4.0 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/github` route.
 - The v0.4.1 Next.js 16.3.1 production build passed, including TypeScript, static page generation, and the `/resume` route.
+- The v0.5.0 production build requires manual verification because the Codex sandbox blocks Turbopack port binding with `EPERM`.
 - Fake GitHub Review GUI covers PR 42, PR 43 empty Findings, PR 500 → HTTP 502, invalid URL → HTTP 422, empty-input blocking, bilingual UI, themes, responsive layout, and a clean console.
 - Real GitHub Review REST/GUI against public PR `openai/openai-python#3357` covers structured metadata, two Findings, Assessment, Test Gaps, Maintainability, Markdown Review, one HTTP 200 business POST, a clean console, and no GitHub writes.
 - Real Resume GUI validation covers one production HTTP 200 request, requirement description/importance/status, section-aware evidence excerpts, hidden machine IDs, bilingual UI, themes, responsive layout, and a clean console.
+- Prompt Workspace Fake E2E covers success, failed criteria, required-tools guarding, variant/request fidelity, input validation, production isolation, and zero DeepSeek calls.
+- Real Prompt Workspace E2E covers production mode, `deepseek-v4-flash`, one HTTP 200 Prompt POST, reward 1.0, completed true, all criteria passed, zero tool calls, protected secrets, correct lifecycle, and bilingual/theme/responsive GUI behavior.
 
 ## Non Goals
 
@@ -133,6 +154,7 @@ Each requirement assessment preserves legacy `requirement_id` and `source_block_
 - Copying or reimplementing WRA, PKRA, or CWC internals.
 - GitHub comments, submitted reviews, approve/request-changes actions, merge/close, repository mutation, GitHub App/OAuth, webhook handling, GitHub Review SSE, or execution of PR code.
 - User accounts, cloud deployment, persisted Research history, multi-agent orchestration, or MCP integration.
+- Prompt Vault/history, variables/templates, arbitrary callable tools, multi-run comparison, partial-credit evaluation, or semantic LLM judging.
 
 ## Known UX Limitation
 
