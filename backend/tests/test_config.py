@@ -10,6 +10,7 @@ SETTINGS_ENVIRONMENT_VARIABLES = (
     "MODEL_NAME",
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_TIMEOUT_SECONDS",
     "PKRA_DATABASE_URL",
     "PKRA_ENABLE_WEB_SEARCH",
     "CORS_ORIGINS",
@@ -33,6 +34,7 @@ def test_default_settings() -> None:
     assert settings.model_provider == "deepseek"
     assert settings.model_name == "deepseek-v4-flash"
     assert settings.deepseek_base_url == "https://api.deepseek.com"
+    assert settings.deepseek_timeout_seconds == 60.0
     assert settings.pkra_database_url is None
     assert settings.pkra_enable_web_search is True
     assert settings.cors_origins == (
@@ -48,6 +50,7 @@ def test_environment_variables_override_defaults(
     monkeypatch.setenv("MODEL_NAME", "configured-model")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "configured-api-key")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.example")
+    monkeypatch.setenv("DEEPSEEK_TIMEOUT_SECONDS", "27.5")
     monkeypatch.setenv(
         "PKRA_DATABASE_URL",
         " postgresql+psycopg://user:password@localhost/research ",
@@ -64,6 +67,7 @@ def test_environment_variables_override_defaults(
     assert settings.model_name == "configured-model"
     assert settings.deepseek_api_key == "configured-api-key"
     assert settings.deepseek_base_url == "https://deepseek.example"
+    assert settings.deepseek_timeout_seconds == 27.5
     assert (
         settings.pkra_database_url
         == "postgresql+psycopg://user:password@localhost/research"
@@ -97,6 +101,15 @@ def test_base_url_trailing_slashes_are_removed(
     settings = Settings()
 
     assert settings.deepseek_base_url == "https://api.deepseek.com"
+
+
+def test_non_positive_deepseek_timeout_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEEPSEEK_TIMEOUT_SECONDS", "0")
+
+    with pytest.raises(ValidationError):
+        Settings()
 
 
 def test_api_key_is_excluded_from_repr(monkeypatch: pytest.MonkeyPatch) -> None:

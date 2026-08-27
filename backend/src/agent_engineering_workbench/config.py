@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     model_name: str = "deepseek-v4-flash"
     deepseek_api_key: str | None = Field(default=None, repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_timeout_seconds: float = Field(default=60.0, gt=0)
     pkra_database_url: str | None = Field(default=None, repr=False)
     pkra_enable_web_search: bool = True
     cors_origins: tuple[str, ...] = (

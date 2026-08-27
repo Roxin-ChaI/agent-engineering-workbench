@@ -6,13 +6,24 @@ from agent_engineering_workbench import __version__
 from agent_engineering_workbench.api import (
     context_router,
     github_router,
+    prompt_router,
     research_router,
     resume_router,
+)
+from agent_engineering_workbench.api.prompt import (
+    handle_prompt_configuration_error,
+    handle_prompt_lifecycle_error,
+    handle_prompt_model_error,
 )
 from agent_engineering_workbench.api.resume import (
     handle_resume_configuration_error,
 )
 from agent_engineering_workbench.config import get_settings
+from agent_engineering_workbench.prompt_errors import (
+    PromptExperimentConfigurationError,
+    PromptExperimentLifecycleError,
+    PromptExperimentModelError,
+)
 from agent_engineering_workbench.resume_errors import (
     ResumeOptimizationConfigurationError,
 )
@@ -38,9 +49,22 @@ app.include_router(research_router)
 app.include_router(context_router)
 app.include_router(github_router)
 app.include_router(resume_router)
+app.include_router(prompt_router)
 app.add_exception_handler(
     ResumeOptimizationConfigurationError,
     handle_resume_configuration_error,
+)
+app.add_exception_handler(
+    PromptExperimentConfigurationError,
+    handle_prompt_configuration_error,
+)
+app.add_exception_handler(
+    PromptExperimentLifecycleError,
+    handle_prompt_lifecycle_error,
+)
+app.add_exception_handler(
+    PromptExperimentModelError,
+    handle_prompt_model_error,
 )
 
 

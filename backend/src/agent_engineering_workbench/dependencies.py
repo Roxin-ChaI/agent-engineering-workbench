@@ -13,6 +13,17 @@ from ai_resume_optimizer import (
     ResumeOptimizerConfig,
     create_resume_optimizer,
 )
+from prompt_engineering_workbench import (  # type: ignore[import-untyped]
+    ConfigurationError as PublicPromptConfigurationError,
+)
+from prompt_engineering_workbench import (
+    ModelClientError as PublicPromptModelClientError,
+)
+from prompt_engineering_workbench import (
+    PromptExperimentRunnerConfig,
+    create_prompt_experiment_runner,
+)
+from pydantic import ValidationError
 from web_research_agent.agent import WebResearchAgent  # type: ignore[import-untyped]
 from web_research_agent.llm import (  # type: ignore[import-untyped]
     create_deepseek_model,
@@ -31,6 +42,10 @@ from agent_engineering_workbench.adapters.pkra import (
     PKRAAdapter,
     PKRARunner,
 )
+from agent_engineering_workbench.adapters.prompt_experiment import (
+    PromptExperimentAdapter,
+    PromptExperimentRunnerProtocol,
+)
 from agent_engineering_workbench.adapters.resume_optimizer import (
     ResumeOptimizerAdapter,
     ResumeOptimizerRunnerProtocol,
@@ -39,6 +54,11 @@ from agent_engineering_workbench.adapters.wra import WRAAdapter
 from agent_engineering_workbench.config import Settings, get_settings
 from agent_engineering_workbench.github_review_errors import (
     GitHubReviewConfigurationError,
+)
+from agent_engineering_workbench.prompt_errors import (
+    PromptExperimentConfigurationError,
+    PromptExperimentLifecycleError,
+    PromptExperimentModelError,
 )
 from agent_engineering_workbench.resume_errors import (
     ResumeOptimizationConfigurationError,
@@ -64,11 +84,18 @@ class _CreateAgentRunner(Protocol):
     def __call__(self, config: object) -> _ClosablePKRARunner: ...
 
 
+class _ClosablePromptExperimentRunner(
+    PromptExperimentRunnerProtocol,
+    Protocol,
+):
+    def close(self) -> None: ...
+
+
 def _load_pkra_public_api() -> tuple[
     _AgentRunnerConfigFactory,
     _CreateAgentRunner,
 ]:
-    from research_agent import (  # type: ignore[import-not-found, import-untyped]
+    from research_agent import (  # type: ignore[import-untyped]
         AgentRunnerConfig,
         create_agent_runner,
     )
@@ -180,6 +207,53 @@ def get_resume_optimizer_adapter() -> Iterator[ResumeOptimizerAdapter]:
         yield adapter
     finally:
         adapter.close()
+
+
+def get_prompt_experiment_adapter() -> Iterator[PromptExperimentAdapter]:
+    settings = get_settings()
+    if settings.model_provider != "deepseek":
+        raise PromptExperimentConfigurationError(
+            "Prompt experiment service is not configured."
+        )
+
+    api_key = settings.deepseek_api_key
+    if api_key is None or not api_key.strip():
+        raise PromptExperimentConfigurationError(
+            "Prompt experiment service is not configured."
+        )
+
+    try:
+        config = PromptExperimentRunnerConfig(
+            deepseek_api_key=api_key.strip(),
+            deepseek_model=settings.model_name,
+            deepseek_timeout_seconds=settings.deepseek_timeout_seconds,
+        )
+        runner = cast(
+            _ClosablePromptExperimentRunner,
+            create_prompt_experiment_runner(config),
+        )
+    except (PublicPromptConfigurationError, ValidationError) as exc:
+        raise PromptExperimentConfigurationError(
+            "Prompt experiment service is not configured."
+        ) from exc
+    except PublicPromptModelClientError as exc:
+        raise PromptExperimentModelError(
+            "Prompt experiment model request failed."
+        ) from exc
+
+    try:
+        yield PromptExperimentAdapter(runner)
+    finally:
+        try:
+            runner.close()
+        except PublicPromptModelClientError as exc:
+            raise PromptExperimentLifecycleError(
+                "Prompt experiment service is unavailable."
+            ) from exc
+        except Exception as exc:
+            raise PromptExperimentLifecycleError(
+                "Prompt experiment service is unavailable."
+            ) from exc
 
 
 def get_knowledge_research_adapter() -> Iterator[WorkbenchAdapter]:
