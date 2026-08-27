@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { PromptExperimentWorkspace } from "@/components/prompt-experiment-workspace";
 
 export default function PromptsPage() {
-  return <ComingSoon titleKey="navigation.prompts" />;
+  return <PromptExperimentWorkspace />;
 }
