@@ -3,6 +3,8 @@ import type {
   ContextCompressionResult,
   GitHubReviewRequest,
   GitHubReviewResult,
+  PromptExperimentRequest,
+  PromptExperimentResult,
   ResumeOptimizationResult,
   RunResult,
   StreamEvent,
@@ -57,6 +59,16 @@ export async function optimizeResume(
   formData.append("resume", resume);
   formData.append("job_description", jobDescription);
   return post("/api/resume/optimize", "Resume optimization", formData);
+}
+
+export async function runPromptExperiment(
+  request: PromptExperimentRequest,
+): Promise<PromptExperimentResult> {
+  return postJson(
+    "/api/prompts/experiment",
+    "Prompt experiment",
+    request,
+  );
 }
 
 async function runResearch(
