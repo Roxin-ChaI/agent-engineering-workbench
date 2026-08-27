@@ -233,3 +233,73 @@ export interface ResumeOptimizationResult {
   optimized_resume: OptimizedResume;
   warnings: string[];
 }
+
+export const PROMPT_EXPERIMENT_VARIANTS = [
+  "baseline",
+  "tone_trump",
+  "tone_casual",
+  "wiki_random",
+  "no_tool_desc",
+  "all_ablations",
+] as const;
+
+export type PromptExperimentVariant =
+  (typeof PROMPT_EXPERIMENT_VARIANTS)[number];
+
+export type PromptExperimentEnvironment = "airline" | "retail";
+
+export interface PromptBundleInput {
+  system_prompt: string;
+  wiki_rules: string[];
+}
+
+export interface PromptSuccessCriteria {
+  require_final_response?: boolean;
+  exact_response?: string | null;
+  required_response_substrings?: string[];
+  forbidden_response_substrings?: string[];
+  required_tool_names?: string[];
+  forbidden_tool_names?: string[];
+}
+
+export interface PromptTaskInput {
+  task_id: string;
+  environment: PromptExperimentEnvironment;
+  instruction: string;
+  success_criteria?: PromptSuccessCriteria;
+}
+
+export interface PromptExperimentOptions {
+  max_steps?: number;
+  seed?: number;
+}
+
+export interface PromptExperimentRequest {
+  prompt: PromptBundleInput;
+  task: PromptTaskInput;
+  variant?: PromptExperimentVariant;
+  options?: PromptExperimentOptions;
+}
+
+export interface PromptEvaluationSummary {
+  reward: number;
+  completed: boolean;
+  criteria_total: number;
+  criteria_passed: number;
+  criteria_failed: number;
+}
+
+export interface PromptExperimentMetrics {
+  step_count: number;
+  tool_call_count: number;
+}
+
+export interface PromptExperimentResult {
+  task_id: string;
+  variant: PromptExperimentVariant;
+  final_response: string | null;
+  reward: number;
+  completed: boolean;
+  evaluation: PromptEvaluationSummary;
+  metrics: PromptExperimentMetrics;
+}
