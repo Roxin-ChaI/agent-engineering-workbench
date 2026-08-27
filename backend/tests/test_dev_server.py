@@ -23,6 +23,7 @@ from agent_engineering_workbench.dependencies import (
     get_context_compression_adapter,
     get_github_review_adapter,
     get_knowledge_research_adapter,
+    get_prompt_experiment_adapter,
     get_resume_optimizer_adapter,
     get_web_research_adapter,
 )
@@ -30,11 +31,13 @@ from agent_engineering_workbench.dev_server import (
     FakeContextCompressionAdapter,
     FakeGitHubReviewAdapter,
     FakeKnowledgeResearchAdapter,
+    FakePromptExperimentAdapter,
     FakeResumeOptimizerAdapter,
     FakeWebResearchAdapter,
     get_fake_context_compression_adapter,
     get_fake_github_review_adapter,
     get_fake_knowledge_research_adapter,
+    get_fake_prompt_experiment_adapter,
     get_fake_resume_optimizer_adapter,
     get_fake_web_research_adapter,
 )
@@ -45,6 +48,11 @@ from agent_engineering_workbench.github_review_contracts import (
 )
 from agent_engineering_workbench.github_review_errors import (
     GitHubReviewerClosedError,
+)
+from agent_engineering_workbench.prompt_contracts import (
+    PromptExperimentRequest,
+    PromptExperimentResult,
+    PromptExperimentVariant,
 )
 from agent_engineering_workbench.resume_contracts import (
     ResumeAssessmentStatus,
@@ -97,6 +105,9 @@ def configure_fake_dependency() -> Iterator[None]:
     app.dependency_overrides[get_resume_optimizer_adapter] = (
         get_fake_resume_optimizer_adapter
     )
+    app.dependency_overrides[get_prompt_experiment_adapter] = (
+        get_fake_prompt_experiment_adapter
+    )
     yield
     app.dependency_overrides.clear()
 
@@ -110,6 +121,44 @@ def parse_sse_event_types(body: str) -> list[str]:
         block.splitlines()[0].removeprefix("event: ")
         for block in body.strip().split("\n\n")
     ]
+
+
+def prompt_request(
+    *,
+    variant: PromptExperimentVariant = PromptExperimentVariant.BASELINE,
+    exact_response: str | None = None,
+    required_response_substrings: tuple[str, ...] = (),
+    forbidden_response_substrings: tuple[str, ...] = (),
+    required_tool_names: tuple[str, ...] = (),
+    forbidden_tool_names: tuple[str, ...] = (),
+) -> PromptExperimentRequest:
+    return PromptExperimentRequest.model_validate(
+        {
+            "prompt": {
+                "system_prompt": "Follow the supplied policy exactly.",
+                "wiki_rules": ["Confirm details before answering."],
+            },
+            "task": {
+                "task_id": "fake-prompt-task",
+                "environment": "airline",
+                "instruction": "Confirm the baggage allowance.",
+                "success_criteria": {
+                    "require_final_response": True,
+                    "exact_response": exact_response,
+                    "required_response_substrings": (
+                        required_response_substrings
+                    ),
+                    "forbidden_response_substrings": (
+                        forbidden_response_substrings
+                    ),
+                    "required_tool_names": required_tool_names,
+                    "forbidden_tool_names": forbidden_tool_names,
+                },
+            },
+            "variant": variant,
+            "options": {"max_steps": 30, "seed": 0},
+        }
+    )
 
 
 def test_fake_adapter_satisfies_contract_and_returns_gui_fixture() -> None:
@@ -156,6 +205,9 @@ def test_dev_app_overrides_production_dependencies() -> None:
     )
     assert app.dependency_overrides[get_resume_optimizer_adapter] is (
         get_fake_resume_optimizer_adapter
+    )
+    assert app.dependency_overrides[get_prompt_experiment_adapter] is (
+        get_fake_prompt_experiment_adapter
     )
 
 
@@ -345,6 +397,162 @@ def test_production_context_dependency_remains_real_without_dev_override() -> No
 
     assert isinstance(adapter, CWCAdapter)
     assert get_context_compression_adapter not in app.dependency_overrides
+
+
+def test_fake_prompt_adapter_returns_deterministic_contract_result() -> None:
+    request = prompt_request(
+        exact_response="Prompt Experiment exact result.",
+        required_response_substrings=("Prompt Experiment",),
+        forbidden_response_substrings=("unwanted",),
+        forbidden_tool_names=("lookup_booking",),
+    )
+    adapter = FakePromptExperimentAdapter()
+
+    first_result = adapter.run(request)
+    second_result = adapter.run(request)
+
+    assert first_result == second_result
+    assert first_result.task_id == request.task.task_id
+    assert first_result.variant is request.variant
+    assert first_result.final_response == "Prompt Experiment exact result."
+    assert first_result.reward == 1.0
+    assert first_result.completed is True
+    assert first_result.evaluation.model_dump() == {
+        "reward": 1.0,
+        "completed": True,
+        "criteria_total": 5,
+        "criteria_passed": 5,
+        "criteria_failed": 0,
+    }
+    assert first_result.metrics.model_dump() == {
+        "step_count": 1,
+        "tool_call_count": 0,
+    }
+
+
+def test_prompt_rest_endpoint_returns_fake_result_without_api_key_or_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(
+        dependencies,
+        "create_prompt_experiment_runner",
+        lambda *_args, **_kwargs: pytest.fail(
+            "production prompt runner must not be created"
+        ),
+    )
+    request = prompt_request(
+        required_response_substrings=("deterministic response",),
+        forbidden_response_substrings=("unwanted",),
+    )
+
+    response = TestClient(app).post(
+        "/api/prompts/experiment",
+        json=request.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    result = PromptExperimentResult.model_validate(response.json())
+    assert result.task_id == request.task.task_id
+    assert result.variant is request.variant
+    assert result.final_response is not None
+    assert "Prompt Experiment" in result.final_response
+    assert "deterministic response" in result.final_response
+    assert result.reward == 1.0
+    assert result.completed is True
+    assert result.evaluation.criteria_total == 3
+    assert result.evaluation.criteria_passed == 3
+    assert result.evaluation.criteria_failed == 0
+    assert result.metrics.step_count == 1
+    assert result.metrics.tool_call_count == 0
+
+
+def test_prompt_fake_failed_evaluation_remains_http_200() -> None:
+    request = prompt_request(
+        forbidden_response_substrings=("Prompt Experiment",),
+    )
+
+    response = TestClient(app).post(
+        "/api/prompts/experiment",
+        json=request.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    result = PromptExperimentResult.model_validate(response.json())
+    assert result.reward == 0.0
+    assert result.completed is False
+    assert result.evaluation.criteria_total == 2
+    assert result.evaluation.criteria_passed == 1
+    assert result.evaluation.criteria_failed == 1
+
+
+@pytest.mark.parametrize("variant", tuple(PromptExperimentVariant))
+def test_prompt_fake_supports_each_single_variant(
+    variant: PromptExperimentVariant,
+) -> None:
+    request = prompt_request(variant=variant)
+
+    response = TestClient(app).post(
+        "/api/prompts/experiment",
+        json=request.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    result = PromptExperimentResult.model_validate(response.json())
+    assert result.variant is variant
+
+
+def test_prompt_fake_required_tools_fail_closed_without_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        dependencies,
+        "create_prompt_experiment_runner",
+        lambda *_args, **_kwargs: pytest.fail(
+            "production prompt runner must not be created"
+        ),
+    )
+    request = prompt_request(required_tool_names=("lookup_booking",))
+
+    response = TestClient(app).post(
+        "/api/prompts/experiment",
+        json=request.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Prompt experiment input is invalid."
+    }
+
+
+def test_fake_prompt_adapter_has_no_external_execution_capability() -> None:
+    source = inspect.getsource(FakePromptExperimentAdapter)
+
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "prompt_engineering_workbench",
+            "create_prompt_experiment_runner",
+            "DEEPSEEK_API_KEY",
+            "httpx",
+            "requests",
+            "subprocess",
+        )
+    )
+
+
+def test_production_app_does_not_enable_fake_prompt_experiments() -> None:
+    app.dependency_overrides.pop(get_prompt_experiment_adapter)
+
+    production_source = inspect.getsource(production_app_module)
+    production_dependency_source = inspect.getsource(
+        dependencies.get_prompt_experiment_adapter
+    )
+
+    assert get_prompt_experiment_adapter not in app.dependency_overrides
+    assert "dev_server" not in production_source
+    assert "FakePromptExperimentAdapter" not in production_source
+    assert "create_prompt_experiment_runner" in production_dependency_source
 
 
 def test_github_review_endpoint_returns_deterministic_fake_result(

@@ -25,6 +25,7 @@ from agent_engineering_workbench.dependencies import (
     get_context_compression_adapter,
     get_github_review_adapter,
     get_knowledge_research_adapter,
+    get_prompt_experiment_adapter,
     get_resume_optimizer_adapter,
     get_web_research_adapter,
 )
@@ -40,6 +41,15 @@ from agent_engineering_workbench.github_review_errors import (
     GitHubReviewerClosedError,
     GitHubReviewExecutionError,
     InvalidGitHubPullRequestError,
+)
+from agent_engineering_workbench.prompt_contracts import (
+    PromptEvaluationSummary,
+    PromptExperimentMetrics,
+    PromptExperimentRequest,
+    PromptExperimentResult,
+)
+from agent_engineering_workbench.prompt_errors import (
+    InvalidPromptExperimentInputError,
 )
 from agent_engineering_workbench.resume_contracts import (
     OptimizedResume,
@@ -367,6 +377,69 @@ class FakeResumeOptimizerAdapter:
         self._closed = True
 
 
+class FakePromptExperimentAdapter:
+    """Return deterministic Prompt Experiment data without external calls."""
+
+    def run(
+        self,
+        request: PromptExperimentRequest,
+    ) -> PromptExperimentResult:
+        criteria = request.task.success_criteria
+        if criteria.required_tool_names:
+            raise InvalidPromptExperimentInputError(
+                "Required tool criteria are unavailable in this workspace."
+            )
+
+        final_response = criteria.exact_response
+        if final_response is None:
+            required_text = " ".join(criteria.required_response_substrings)
+            final_response = "Prompt Experiment completed with a local result."
+            if required_text:
+                final_response = f"{final_response} {required_text}"
+
+        checks = [
+            *([bool(final_response)] if criteria.require_final_response else []),
+            *(
+                [final_response == criteria.exact_response]
+                if criteria.exact_response is not None
+                else []
+            ),
+            *(
+                value in final_response
+                for value in criteria.required_response_substrings
+            ),
+            *(
+                value not in final_response
+                for value in criteria.forbidden_response_substrings
+            ),
+            *(True for _value in criteria.forbidden_tool_names),
+        ]
+        criteria_passed = sum(checks)
+        criteria_total = len(checks)
+        criteria_failed = criteria_total - criteria_passed
+        completed = criteria_failed == 0
+        reward = 1.0 if completed else 0.0
+
+        return PromptExperimentResult(
+            task_id=request.task.task_id,
+            variant=request.variant,
+            final_response=final_response,
+            reward=reward,
+            completed=completed,
+            evaluation=PromptEvaluationSummary(
+                reward=reward,
+                completed=completed,
+                criteria_total=criteria_total,
+                criteria_passed=criteria_passed,
+                criteria_failed=criteria_failed,
+            ),
+            metrics=PromptExperimentMetrics(
+                step_count=1,
+                tool_call_count=0,
+            ),
+        )
+
+
 def _fake_resume_optimization_result(
     *,
     resume_suffix: str,
@@ -554,6 +627,10 @@ def get_fake_resume_optimizer_adapter() -> Iterator[FakeResumeOptimizerAdapter]:
         adapter.close()
 
 
+def get_fake_prompt_experiment_adapter() -> FakePromptExperimentAdapter:
+    return FakePromptExperimentAdapter()
+
+
 app.dependency_overrides[get_web_research_adapter] = (
     get_fake_web_research_adapter
 )
@@ -568,6 +645,9 @@ app.dependency_overrides[get_github_review_adapter] = (
 )
 app.dependency_overrides[get_resume_optimizer_adapter] = (
     get_fake_resume_optimizer_adapter
+)
+app.dependency_overrides[get_prompt_experiment_adapter] = (
+    get_fake_prompt_experiment_adapter
 )
 
 
