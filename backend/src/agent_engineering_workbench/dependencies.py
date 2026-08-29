@@ -60,6 +60,10 @@ from agent_engineering_workbench.prompt_errors import (
     PromptExperimentLifecycleError,
     PromptExperimentModelError,
 )
+from agent_engineering_workbench.prompt_library_contracts import (
+    PromptLibraryBackend,
+)
+from agent_engineering_workbench.prompt_vault_client import PromptVaultHttpClient
 from agent_engineering_workbench.resume_errors import (
     ResumeOptimizationConfigurationError,
 )
@@ -254,6 +258,18 @@ def get_prompt_experiment_adapter() -> Iterator[PromptExperimentAdapter]:
             raise PromptExperimentLifecycleError(
                 "Prompt experiment service is unavailable."
             ) from exc
+
+
+def get_prompt_library_backend() -> Iterator[PromptLibraryBackend]:
+    settings = get_settings()
+    client = PromptVaultHttpClient(
+        base_url=settings.prompt_vault_base_url,
+        timeout_seconds=settings.prompt_vault_timeout_seconds,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def get_knowledge_research_adapter() -> Iterator[WorkbenchAdapter]:
