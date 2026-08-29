@@ -8,6 +8,7 @@ version = "0.5.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",
+    "httpx",
     "openai>=2.45,<3",
     "uvicorn",
     "pydantic",
@@ -25,7 +26,6 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
     "ruff",
     "mypy",
 ]

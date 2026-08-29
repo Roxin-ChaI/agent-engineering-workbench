@@ -11,6 +11,8 @@ SETTINGS_ENVIRONMENT_VARIABLES = (
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
     "DEEPSEEK_TIMEOUT_SECONDS",
+    "PROMPT_VAULT_BASE_URL",
+    "PROMPT_VAULT_TIMEOUT_SECONDS",
     "PKRA_DATABASE_URL",
     "PKRA_ENABLE_WEB_SEARCH",
     "CORS_ORIGINS",
@@ -35,6 +37,8 @@ def test_default_settings() -> None:
     assert settings.model_name == "deepseek-v4-flash"
     assert settings.deepseek_base_url == "https://api.deepseek.com"
     assert settings.deepseek_timeout_seconds == 60.0
+    assert settings.prompt_vault_base_url == "http://127.0.0.1:8000"
+    assert settings.prompt_vault_timeout_seconds == 10.0
     assert settings.pkra_database_url is None
     assert settings.pkra_enable_web_search is True
     assert settings.cors_origins == (
@@ -51,6 +55,8 @@ def test_environment_variables_override_defaults(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "configured-api-key")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.example")
     monkeypatch.setenv("DEEPSEEK_TIMEOUT_SECONDS", "27.5")
+    monkeypatch.setenv("PROMPT_VAULT_BASE_URL", "https://vault.example/")
+    monkeypatch.setenv("PROMPT_VAULT_TIMEOUT_SECONDS", "12.5")
     monkeypatch.setenv(
         "PKRA_DATABASE_URL",
         " postgresql+psycopg://user:password@localhost/research ",
@@ -68,6 +74,8 @@ def test_environment_variables_override_defaults(
     assert settings.deepseek_api_key == "configured-api-key"
     assert settings.deepseek_base_url == "https://deepseek.example"
     assert settings.deepseek_timeout_seconds == 27.5
+    assert settings.prompt_vault_base_url == "https://vault.example"
+    assert settings.prompt_vault_timeout_seconds == 12.5
     assert (
         settings.pkra_database_url
         == "postgresql+psycopg://user:password@localhost/research"
@@ -107,6 +115,36 @@ def test_non_positive_deepseek_timeout_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEEPSEEK_TIMEOUT_SECONDS", "0")
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_prompt_vault_base_url_trailing_slashes_are_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PROMPT_VAULT_BASE_URL", "http://127.0.0.1:8000///")
+
+    settings = Settings()
+
+    assert settings.prompt_vault_base_url == "http://127.0.0.1:8000"
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_prompt_vault_base_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("PROMPT_VAULT_BASE_URL", value)
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_non_positive_prompt_vault_timeout_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PROMPT_VAULT_TIMEOUT_SECONDS", "0")
 
     with pytest.raises(ValidationError):
         Settings()

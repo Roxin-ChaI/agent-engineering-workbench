@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = Field(default=None, repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_timeout_seconds: float = Field(default=60.0, gt=0)
+    prompt_vault_base_url: str = "http://127.0.0.1:8000"
+    prompt_vault_timeout_seconds: float = Field(default=10.0, gt=0)
     pkra_database_url: str | None = Field(default=None, repr=False)
     pkra_enable_web_search: bool = True
     cors_origins: tuple[str, ...] = (
@@ -31,6 +33,14 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_base_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("prompt_vault_base_url")
+    @classmethod
+    def normalize_prompt_vault_base_url(cls, value: str) -> str:
+        normalized_value = value.strip().rstrip("/")
+        if not normalized_value:
+            raise ValueError("must not be empty")
+        return normalized_value
 
     @field_validator("pkra_database_url")
     @classmethod
