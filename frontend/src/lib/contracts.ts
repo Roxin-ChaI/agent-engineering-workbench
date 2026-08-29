@@ -303,3 +303,25 @@ export interface PromptExperimentResult {
   evaluation: PromptEvaluationSummary;
   metrics: PromptExperimentMetrics;
 }
+
+export interface PromptLibraryItem {
+  id: number;
+  title: string;
+  content: string;
+  wiki_rules: string[];
+  tags: string[];
+}
+
+export interface PromptLibraryCreateRequest {
+  title: string;
+  content: string;
+  wiki_rules: string[];
+  tags: string[];
+}
+
+export interface PromptLibraryUpdateRequest {
+  title?: string;
+  content?: string;
+  wiki_rules?: string[];
+  tags?: string[];
+}

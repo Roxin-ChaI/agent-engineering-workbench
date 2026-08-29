@@ -5,6 +5,9 @@ import type {
   GitHubReviewResult,
   PromptExperimentRequest,
   PromptExperimentResult,
+  PromptLibraryCreateRequest,
+  PromptLibraryItem,
+  PromptLibraryUpdateRequest,
   ResumeOptimizationResult,
   RunResult,
   StreamEvent,
@@ -71,6 +74,78 @@ export async function runPromptExperiment(
   );
 }
 
+export async function createPromptLibraryItem(
+  request: PromptLibraryCreateRequest,
+): Promise<PromptLibraryItem> {
+  return requestJson(
+    "/api/prompts/library",
+    "Prompt library create",
+    201,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+}
+
+export async function listPromptLibraryItems(): Promise<PromptLibraryItem[]> {
+  return requestJson(
+    "/api/prompts/library",
+    "Prompt library list",
+    200,
+    { method: "GET" },
+  );
+}
+
+export async function getPromptLibraryItem(
+  id: number,
+): Promise<PromptLibraryItem> {
+  return requestJson(
+    `/api/prompts/library/${encodeURIComponent(String(id))}`,
+    "Prompt library get",
+    200,
+    { method: "GET" },
+  );
+}
+
+export async function searchPromptLibraryItems(
+  q: string,
+): Promise<PromptLibraryItem[]> {
+  const query = new URLSearchParams({ q });
+  return requestJson(
+    `/api/prompts/library/search?${query.toString()}`,
+    "Prompt library search",
+    200,
+    { method: "GET" },
+  );
+}
+
+export async function updatePromptLibraryItem(
+  id: number,
+  request: PromptLibraryUpdateRequest,
+): Promise<PromptLibraryItem> {
+  return requestJson(
+    `/api/prompts/library/${encodeURIComponent(String(id))}`,
+    "Prompt library update",
+    200,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+}
+
+export async function deletePromptLibraryItem(id: number): Promise<void> {
+  await requestWorkbench(
+    `/api/prompts/library/${encodeURIComponent(String(id))}`,
+    "Prompt library delete",
+    { method: "DELETE" },
+    204,
+  );
+}
+
 async function runResearch(
   path: string,
   requestName: string,
@@ -101,17 +176,48 @@ async function post<Result>(
   body: BodyInit,
   headers?: HeadersInit,
 ): Promise<Result> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+  const response = await requestWorkbench(path, requestName, {
     method: "POST",
     headers,
     body,
   });
 
-  if (!response.ok) {
+  return (await response.json()) as Result;
+}
+
+async function requestJson<Result>(
+  path: string,
+  requestName: string,
+  expectedStatus: number,
+  init: RequestInit,
+): Promise<Result> {
+  const response = await requestWorkbench(
+    path,
+    requestName,
+    init,
+    expectedStatus,
+  );
+  return (await response.json()) as Result;
+}
+
+async function requestWorkbench(
+  path: string,
+  requestName: string,
+  init: RequestInit,
+  expectedStatus?: number,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, init);
+  } catch {
+    throw new Error(`${requestName} request failed`);
+  }
+
+  if (!response.ok || (expectedStatus !== undefined && response.status !== expectedStatus)) {
     throw new Error(`${requestName} request failed with status ${response.status}`);
   }
 
-  return (await response.json()) as Result;
+  return response;
 }
 
 const streamEventTypes = new Set<StreamEventType>([
