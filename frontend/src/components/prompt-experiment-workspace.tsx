@@ -2,6 +2,7 @@
 
 import { type FormEvent, useRef, useState } from "react";
 
+import { PromptLibraryPanel } from "@/components/prompt-library-panel";
 import { usePreferences } from "@/components/preferences-provider";
 import { runPromptExperiment } from "@/lib/api";
 import {
@@ -10,7 +11,9 @@ import {
   type PromptExperimentRequest,
   type PromptExperimentResult,
   type PromptExperimentVariant,
+  type PromptLibraryItem,
 } from "@/lib/contracts";
+import { promptLibraryRulesToText } from "@/lib/prompt-library-workspace-state";
 import type { TranslationKey } from "@/lib/i18n";
 
 const variantLabelKeys: Record<PromptExperimentVariant, TranslationKey> = {
@@ -228,6 +231,15 @@ export function PromptExperimentWorkspace() {
       <p className="section-label">{t("prompt.section")}</p>
       <h1 className="page-title">{t("prompt.title")}</h1>
       <p className="page-description">{t("prompt.description")}</p>
+
+      <PromptLibraryPanel
+        systemPrompt={systemPrompt}
+        wikiRules={wikiRules}
+        onLoadPrompt={(item: PromptLibraryItem) => {
+          setSystemPrompt(item.content);
+          setWikiRules(promptLibraryRulesToText(item.wiki_rules));
+        }}
+      />
 
       <form className="mt-8 space-y-4" aria-busy={loading} onSubmit={handleSubmit}>
         <div className="grid gap-4 xl:grid-cols-2">
