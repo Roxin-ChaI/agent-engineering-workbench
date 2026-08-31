@@ -162,7 +162,7 @@ def test_health_endpoint_remains_available() -> None:
     response = TestClient(app).get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.5.0"}
+    assert response.json() == {"status": "ok", "version": "0.6.0"}
 
 
 def test_completed_knowledge_research_returns_expected_json() -> None:

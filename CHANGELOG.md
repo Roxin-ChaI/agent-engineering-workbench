@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.6.0
+
+### Prompt Library
+
+- Added Workbench-owned Prompt Library contracts and stable REST endpoints for List, Search, Save, Get, Update, and Delete.
+- Added `PromptVaultHttpClient` with strict upstream success-status handling and fail-closed response validation.
+- Added a typed Frontend client and Prompt Library UI inside `/prompts`.
+- Loading a saved bundle updates only Experiment `system_prompt` and `wiki_rules`, preserving task, criteria, selected variant, `max_steps`, and `seed`.
+
+### Architecture
+
+- Integrated Prompt Vault API v0.2.0 as an independent HTTP service/runtime dependency.
+- Browser requests terminate at Workbench-owned APIs; the Browser never calls Prompt Vault directly.
+- Workbench does not import Prompt Vault internals or access its SQLAlchemy database.
+- Prompt Vault base URL and timeout remain Backend-only configuration; database credentials never enter Frontend contracts.
+
+### Reliability
+
+- Prompt Library validation, not-found, upstream, and internal failures map to safe Workbench HTTP 422, 404, 502, and 500 boundaries.
+- Upstream malformed responses and transport failures fail closed without exposing raw Prompt Vault errors.
+- Mutation requests are not automatically retried.
+- Prompt Vault downtime is isolated to Prompt Library; Prompt Experiment remains available.
+
+### Verification
+
+- 517 Backend tests, 12 focused Prompt Library Fake E2E tests, and 33 Frontend tests pass.
+- Ruff, mypy, pip check, Frontend ESLint, and TypeScript pass.
+- Next.js 16.3.1 production build: PASS with Node v24.14.0 and npm 11.9.0, including TypeScript, page data, 10/10 static pages, and `/prompts`.
+- Real Prompt Library E2E: PASS through Prompt Vault API v0.2.0, the production Workbench Backend, the real Frontend, SQLAlchemy, and temporary SQLite. Save/Search/Load/Update/Delete, explicit rule clearing, safe offline HTTP 502 isolation, restart persistence, Browser secret boundaries, no mutation retry, cleanup, and a clean console were verified.
+
+### Compatibility
+
+- Existing Prompt Experiment behavior and `POST /api/prompts/experiment` remain unchanged.
+- Loading a Library item preserves all non-bundle Experiment inputs.
+- Prompt Vault remains outside the Workbench repository and is consumed only through its v0.2.0 HTTP contract.
+
+### Known Limitations
+
+- No Prompt Library pagination.
+- No authentication or multi-user Prompt Vault workflow.
+- No prompt history/version history, experiment-result persistence, or template-variable system.
+
 ## v0.5.0
 
 ### Added

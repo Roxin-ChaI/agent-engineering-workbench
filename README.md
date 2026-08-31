@@ -4,9 +4,9 @@
 
 A modular Web workbench for integrating, running, and inspecting independent AI engineering projects through a unified interface.
 
-## v0.5.0
+## v0.6.0
 
-v0.5.0 provides six workspaces:
+v0.6.0 provides six workspaces:
 
 - Web Research uses [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent) (WRA) v0.2.0.
 - Knowledge Research uses [`production-knowledge-research-agent`](https://github.com/Roxin-ChaI/production-knowledge-research-agent) (PKRA) v0.4.0.
@@ -15,7 +15,7 @@ v0.5.0 provides six workspaces:
 - Resume Optimization uses [`ai-resume-optimizer`](https://github.com/Roxin-ChaI/ai-resume-optimizer) v0.2.1.
 - Prompt Experiment uses [`prompt-engineering-workbench`](https://github.com/Roxin-ChaI/prompt-engineering-workbench) v0.2.0.
 
-All six projects remain independent repositories. The Workbench integrates their public Python APIs through adapter boundaries; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA, v0.2.0 added PKRA Knowledge Research, v0.3.0 added Context Lab, v0.4.0 added read-only GitHub Review, v0.4.1 added human-readable Resume provenance, and v0.5.0 adds controlled Prompt Experiments.
+All integrated projects remain independent repositories or services. The Workbench uses stable public boundaries; it neither copies their source nor invokes their CLIs through subprocesses. v0.1.0 introduced the Workbench shell and WRA, v0.2.0 added PKRA Knowledge Research, v0.3.0 added Context Lab, v0.4.0 added read-only GitHub Review, v0.4.1 added human-readable Resume provenance, v0.5.0 added controlled Prompt Experiments, and v0.6.0 adds a Prompt Library backed by Prompt Vault API v0.2.0.
 
 ## Features
 
@@ -27,6 +27,7 @@ All six projects remain independent repositories. The Workbench integrates their
 - Read-only review of public GitHub Pull Requests with PR Overview, Summary, Findings, Test Gaps, Maintainability, Assessment, and Markdown Review
 - Resume optimization with structured requirement assessments and section-aware evidence provenance
 - Controlled Prompt Experiments with variant selection, deterministic success criteria, structured evaluation, and metrics
+- Prompt Library List, Search, Save, Load, Update, and Delete operations backed by Prompt Vault API v0.2.0
 - Collapsible navigation with a persisted expanded or compact layout
 - English and Chinese UI
 - Dark and Light themes with persisted preferences
@@ -54,8 +55,14 @@ Backend endpoints:
 - `POST /api/github/review`
 - `POST /api/resume/optimize`
 - `POST /api/prompts/experiment`
+- `POST /api/prompts/library`
+- `GET /api/prompts/library`
+- `GET /api/prompts/library/search?q=...`
+- `GET /api/prompts/library/{prompt_id}`
+- `PUT /api/prompts/library/{prompt_id}`
+- `DELETE /api/prompts/library/{prompt_id}`
 
-The two Research workspaces offer REST and SSE boundaries. Context Lab, GitHub Review, Resume Optimization, and Prompt Experiment use REST only; none exposes an SSE endpoint.
+The two Research workspaces offer REST and SSE boundaries. Context Lab, GitHub Review, Resume Optimization, Prompt Experiment, and Prompt Library use REST only; none exposes an SSE endpoint.
 
 ## Architecture
 
@@ -80,11 +87,14 @@ Browser
           → Prompt Engineering Workbench v0.2.0 public factory/runner
           → DeepSeek V4 Flash
           → deterministic evaluation
+      → PromptVaultHttpClient
+          → Prompt Vault API v0.2.0 HTTP contract
+          → SQLAlchemy persistence
   → Workbench-owned result contracts
   → GUI
 ```
 
-Research adapters map public agent results into the Workbench-owned `RunResult` contract. Context Lab, GitHub Review, Resume Optimization, and Prompt Experiment use dedicated Workbench-owned contracts. Their adapters translate public structured results; the Frontend depends only on Workbench TypeScript contracts. The Workbench does not import private project internals.
+Research adapters map public agent results into the Workbench-owned `RunResult` contract. Context Lab, GitHub Review, Resume Optimization, Prompt Experiment, and Prompt Library use dedicated Workbench-owned contracts. Their integration boundaries translate public structured results; the Frontend depends only on Workbench TypeScript contracts. The Workbench does not import private project internals or access the Prompt Vault database directly.
 
 ## Dependencies
 
@@ -95,6 +105,7 @@ Research adapters map public agent results into the Workbench-owned `RunResult` 
 - AI Resume Optimizer is pinned to the stable Git tag `v0.2.1`.
 - Prompt Engineering Workbench is pinned to the stable Git tag `v0.2.0`.
 - Normal installation does not require local WRA, PKRA, CWC, Reviewer, Resume Optimizer, or Prompt Engineering Workbench checkouts. Editable installs are optional development overrides only.
+- Prompt Vault API v0.2.0 is a separate HTTP service/runtime dependency, not a Workbench Python package dependency.
 
 ## Context Lab
 
@@ -152,6 +163,22 @@ Success criteria support a required final response, an exact response, required 
 
 Production requests use the Prompt Engineering Workbench v0.2.0 public factory. Each request creates a runner, runs it exactly once, and closes it exactly once. The default model is `deepseek-v4-flash`; provider secrets remain on the Backend and are never part of the browser contract.
 
+## Prompt Library Workspace
+
+The `/prompts` workspace combines Prompt Experiment with a reusable Prompt Library. The Library saves `title`, prompt `content`, `wiki_rules`, and `tags`, and supports List, Search, Save, Load, Update, and Delete through Workbench-owned APIs. Loading a saved item maps `content` to Experiment `system_prompt` and `wiki_rules` to Experiment `wiki_rules`; it preserves the current task, success criteria, selected variant, `max_steps`, and `seed`.
+
+```text
+Browser
+→ Workbench Prompt Library API
+→ PromptVaultHttpClient
+→ Prompt Vault API v0.2.0
+→ SQLAlchemy persistence
+```
+
+The browser never calls Prompt Vault directly. Workbench does not import Prompt Vault's application internals or access its database. `PROMPT_VAULT_BASE_URL` and `PROMPT_VAULT_TIMEOUT_SECONDS` are Backend-only configuration; Prompt Vault database credentials never enter the Frontend.
+
+Workbench maps Prompt Library validation failures to HTTP 422, missing items to 404, Prompt Vault transport/service failures to safe 502 responses, and unexpected internal failures to safe 500 responses. Mutations are not automatically retried. When Prompt Vault is offline, Prompt Library fails safely with HTTP 502 while Prompt Experiment remains available.
+
 ## Research Behavior and SSE Semantics
 
 PKRA returns Answer and Metrics through `RunResult`, but its current public result has no lossless activity trace or structured source/evidence URLs. Successful Knowledge runs therefore currently contain `trace = []` and `sources = []`; these are known contract limitations, not execution failures.
@@ -179,19 +206,20 @@ Neither endpoint provides native real-time token/tool streaming.
 - ai-github-reviewer v0.2.0
 - ai-resume-optimizer v0.2.1
 - prompt-engineering-workbench v0.2.0
+- Prompt Vault API v0.2.0 as an independent HTTP service
 - Anonymous GitHub REST GET for public Pull Requests
 
 ## Quality Baseline
 
-- Backend: 423 tests passed
-- Prompt Workspace focused Fake E2E: 10 tests passed
+- Backend: 517 tests passed
+- Prompt Library focused Fake E2E: 12 tests passed
 - Ruff: PASS
 - mypy: PASS
 - pip check: PASS
 - Frontend ESLint: PASS
 - TypeScript: PASS
-- Frontend static tests: 4 passed
-- Next.js 16.3.1 v0.5.0 production build: MANUAL VERIFICATION REQUIRED (Codex sandbox blocked Turbopack port binding with `EPERM`)
+- Frontend tests: 33 passed
+- Next.js 16.3.1 v0.6.0 production build: PASS (TypeScript, page data, 10/10 static pages, and `/prompts` generation passed; Node v24.14.0, npm 11.9.0)
 
 Fake GUI validation covers all three strategies, invalid JSON blocking before POST, bilingual/theme behavior, and a clean browser console. Real REST/GUI validation covers no-op compression (`45 → 45`, zero saved, `compression_applied=false`, HTTP 200), truncation (`114 → 69`, 45 estimated tokens saved, approximately 60.5% ratio, `compressed_message_count=1`, HTTP 200), TokenBudgetError → HTTP 422, and a clean browser console. Duration is measured per run and is not a fixed benchmark.
 
@@ -200,6 +228,8 @@ GitHub Review Fake GUI validation covers PR 42 with two Findings, PR 43 with an 
 Resume Provenance Real GUI validation passed against the production app with one HTTP 200 request: human-readable requirement descriptions, importance/status, section-aware evidence excerpts, hidden machine IDs, English/Chinese, Light/Dark, responsive layout, and a clean console.
 
 Prompt Workspace deterministic Fake E2E covers success, failed criteria, the required-tools guard, variant and request fidelity, input validation, production isolation, and zero DeepSeek calls through pytest/TestClient plus local browser verification. Real Prompt Workspace E2E passed in production mode with `deepseek-v4-flash`: one Prompt POST returned HTTP 200, reward 1.0, completed true, all criteria passed, zero tool calls, a clean console, protected provider secrets, correct request-scoped lifecycle, and verified bilingual/theme/responsive behavior.
+
+Prompt Library deterministic Fake E2E covers initial list, Save, Search, Load fidelity, Update, explicit rule clearing, Delete, upstream error isolation, mutation failure, request fidelity, Prompt Experiment regression, production isolation, protected secrets, and no automatic retry. Real Prompt Library E2E passed through a real Prompt Vault API v0.2.0 service, real Workbench Backend, real Frontend, SQLAlchemy, and temporary SQLite. It verified Save/Search/Load/Update/Delete, explicit `wiki_rules` clearing, safe HTTP 502 isolation while Prompt Vault was offline, persistence after restart, browser secret boundaries, no mutation retry, cleanup, and a clean console.
 
 ## Known Limitations
 
@@ -211,7 +241,7 @@ Prompt Workspace deterministic Fake E2E covers success, failed criteria, the req
 - PKRA structured Sources/Evidence and Activity Trace are not currently mapped.
 - Research SSE replays available events after synchronous execution; native real-time streaming is unavailable.
 - Prompt Experiment runs one task and one selected variant per request; it has no automatic comparison matrix.
-- Prompt Vault persistence/history and prompt variables/templates are outside the v0.5.0 scope.
+- Prompt Library has no pagination, authentication/multi-user workflow, prompt history/version history, experiment-result persistence, or template-variable system.
 - Prompt Experiment has no arbitrary callable tools; required-tool criteria fail closed.
 - Prompt evaluation is deterministic and binary, with no partial credit or semantic LLM judge.
 

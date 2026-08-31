@@ -20,15 +20,18 @@ Browser
     ├── ResumeOptimizerAdapter
                          → AI Resume Optimizer v0.2.1 public runner
                          → DeepSeek V4 Flash
-    └── PromptExperimentAdapter
+    ├── PromptExperimentAdapter
                          → Prompt Engineering Workbench v0.2.0 public factory/runner
                          → DeepSeek V4 Flash
                          → deterministic evaluation
+    └── PromptVaultHttpClient
+                         → Prompt Vault API v0.2.0 HTTP contract
+                         → SQLAlchemy persistence
 → Workbench-owned result contracts
 → GUI
 ```
 
-Workbench owns UI, integration, presentation, and API boundaries. WRA, PKRA, CWC, AI GitHub Reviewer, AI Resume Optimizer, and Prompt Engineering Workbench remain independent repositories; Workbench neither copies their source nor invokes their CLIs through subprocesses.
+Workbench owns UI, integration, presentation, and API boundaries. WRA, PKRA, CWC, AI GitHub Reviewer, AI Resume Optimizer, and Prompt Engineering Workbench remain independent repositories. Prompt Vault API v0.2.0 remains an independent HTTP service. Workbench neither copies their source nor invokes their CLIs through subprocesses, and it never accesses the Prompt Vault database directly.
 
 ## Frontend
 
@@ -41,7 +44,7 @@ Next.js, React, TypeScript, and Tailwind CSS provide six workspaces:
 - `/resume`
 - `/prompts`
 
-Research pages share `RunResult` presentation and REST/SSE clients. Context Lab, GitHub Review, Resume Optimization, and Prompt Experiment use dedicated Workbench-owned TypeScript contracts and REST clients. The Frontend never imports Python, CWC, WRA, PKRA, Reviewer, Resume Optimizer, Prompt Engineering Workbench, model, or database types.
+Research pages share `RunResult` presentation and REST/SSE clients. Context Lab, GitHub Review, Resume Optimization, Prompt Experiment, and Prompt Library use dedicated Workbench-owned TypeScript contracts and REST clients. The Frontend never imports Python, CWC, WRA, PKRA, Reviewer, Resume Optimizer, Prompt Engineering Workbench, Prompt Vault, model, or database types.
 
 ## Backend API
 
@@ -55,8 +58,14 @@ FastAPI provides:
 - `POST /api/github/review`
 - `POST /api/resume/optimize`
 - `POST /api/prompts/experiment`
+- `POST /api/prompts/library`
+- `GET /api/prompts/library`
+- `GET /api/prompts/library/search?q=...`
+- `GET /api/prompts/library/{prompt_id}`
+- `PUT /api/prompts/library/{prompt_id}`
+- `DELETE /api/prompts/library/{prompt_id}`
 
-Routers receive adapters through FastAPI dependencies. They do not create model, search, database, compression, Reviewer, Resume Optimizer, or prompt-engineering internals. Context, GitHub Review, Resume Optimization, and Prompt Experiment use REST only and have no SSE endpoints.
+Routers receive adapters or service clients through FastAPI dependencies. They do not create model, search, database, compression, Reviewer, Resume Optimizer, prompt-engineering, or Prompt Vault internals. Context, GitHub Review, Resume Optimization, Prompt Experiment, and Prompt Library use REST only and have no SSE endpoints.
 
 ## Research Adapter Boundary
 
@@ -163,9 +172,29 @@ The six supported variants are `baseline`, `tone_trump`, `tone_casual`, `wiki_ra
 
 Production composition uses the upstream public factory with default model `deepseek-v4-flash`. The request-scoped dependency creates one runner, runs it once, and closes it once; provider secrets never enter the browser contract.
 
+## Prompt Library Boundary
+
+```text
+Browser
+→ /prompts
+→ Workbench TypeScript Prompt Library client
+→ /api/prompts/library...
+→ PromptVaultHttpClient
+→ Prompt Vault API v0.2.0 public HTTP contract
+→ SQLAlchemy persistence
+→ Workbench-owned Prompt Library contracts
+→ UI
+```
+
+The Browser calls only Workbench-owned endpoints. Workbench does not import the Prompt Vault FastAPI application, repository, SQLAlchemy models, or database connection. Prompt Vault remains a separately deployed service/runtime dependency. Its Backend-only integration settings are `PROMPT_VAULT_BASE_URL` and positive `PROMPT_VAULT_TIMEOUT_SECONDS`; neither setting nor Prompt Vault database credentials appear in Frontend contracts.
+
+The Library stores `title`, `content`, `wiki_rules`, and `tags`. Loading maps `content` to Prompt Experiment `system_prompt` and maps stored rules to Experiment `wiki_rules`; task, criteria, selected variant, `max_steps`, and `seed` remain unchanged. Update preserves rules when `wiki_rules` is omitted and clears them when an explicit empty list is sent.
+
+Workbench maps invalid Library input to HTTP 422, missing items to 404, Prompt Vault transport/service or malformed-contract failures to a safe 502, and unexpected internal failures to a safe 500. Strict upstream success-status checks and fail-closed response parsing protect contract drift. Mutations are never automatically retried. Prompt Vault downtime is isolated to Prompt Library: Library requests return safe HTTP 502 responses while Prompt Experiment remains available.
+
 ## Production and Fake Isolation
 
-`agent_engineering_workbench.app:app` resolves all real adapters. Only `agent_engineering_workbench.dev_server:app` installs deterministic Fake Web, Knowledge, Context, GitHub Review, Resume, and Prompt dependency overrides. Fake Prompt uses the same `POST /api/prompts/experiment` route and frontend contract, requires no API key, and makes no DeepSeek calls. The production app never falls back to a Fake adapter when configuration or an upstream call fails.
+`agent_engineering_workbench.app:app` resolves all real adapters and the real Prompt Vault HTTP client. Only `agent_engineering_workbench.dev_server:app` installs deterministic Fake Web, Knowledge, Context, GitHub Review, Resume, Prompt Experiment, and Prompt Library dependency overrides. Fake Prompt Experiment and Fake Prompt Library use the same routes and frontend contracts as production, require no API key, and make no external service or DeepSeek calls. The production app never falls back to a Fake dependency when configuration or an upstream call fails.
 
 Fake Context Metrics are test fixtures, not benchmarks: `no_compression` reports `120 → 120`; `truncation` and `windowed` report `120 → 48`; duration is fixed at 3 ms.
 
@@ -190,6 +219,7 @@ This is not native real-time Token/Tool streaming. Context Lab does not use this
 - v0.4.0: AI GitHub Reviewer v0.2.0 Adapter/API/Frontend integration, deterministic Fake scenarios, and read-only GitHub Review workspace.
 - v0.4.1: AI Resume Optimizer v0.2.1 provenance contracts, Adapter mapping, and human-readable Resume workspace evidence.
 - v0.5.0: Prompt Engineering Workbench v0.2.0 Adapter/API/Frontend integration, deterministic Fake scenarios, controlled Prompt Experiment workspace, and collapsible navigation.
+- v0.6.0: Prompt Vault API v0.2.0 HTTP integration, Workbench-owned Prompt Library contracts/API/client, Prompt Library workspace, and deterministic Fake/Real E2E coverage.
 
 ## Known Limitations
 
@@ -198,4 +228,5 @@ This is not native real-time Token/Tool streaming. Context Lab does not use this
 - Frontend presents a generic message for detailed HTTP 422 budget failures.
 - CWC private partition/change reasons are intentionally outside the Workbench contract.
 - Context Lab has no persistence or SSE.
-- Prompt Experiment supports one task and one selected variant per run, with no Prompt Vault/history, variables/templates, arbitrary callable tools, comparison matrix, partial credit, or semantic LLM judge.
+- Prompt Experiment supports one task and one selected variant per run, with no arbitrary callable tools, comparison matrix, partial credit, or semantic LLM judge.
+- Prompt Library has no pagination, authentication/multi-user workflow, prompt history/version history, experiment-result persistence, or template-variable system.
