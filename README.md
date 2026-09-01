@@ -151,7 +151,9 @@ AEW is the application layer for a collection of independently maintained AI eng
 
 ## License
 
-A repository-level license has not yet been added. Review the licenses of integrated upstream projects before reuse or redistribution.
+This project is licensed under the [MIT License](LICENSE).
+
+The integrated upstream projects remain independently licensed; review their respective licenses when reusing or redistributing them.
 
 ---
 
