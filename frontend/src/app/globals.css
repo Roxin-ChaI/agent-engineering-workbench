@@ -243,6 +243,15 @@ textarea:focus-visible {
     cursor: not-allowed;
   }
 
+  .prompt-library-action {
+    width: auto;
+    min-width: max-content;
+    height: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
+    @apply inline-flex items-center justify-center;
+  }
+
   .status-running,
   .status-completed,
   .status-stopped,

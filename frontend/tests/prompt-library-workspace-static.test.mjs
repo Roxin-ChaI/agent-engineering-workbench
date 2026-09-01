@@ -14,6 +14,10 @@ const i18nSource = readFileSync(
   new URL("../src/lib/i18n.ts", import.meta.url),
   "utf8",
 );
+const globalsSource = readFileSync(
+  new URL("../src/app/globals.css", import.meta.url),
+  "utf8",
+);
 const frontendSource = `${librarySource}\n${experimentSource}`;
 
 test("library initializes through Workbench and has loading, empty, and error states", () => {
@@ -94,7 +98,7 @@ test("library and experiment loading states remain isolated", () => {
 });
 
 test("library layout is compact, responsive, themed, and keeps placeholders", () => {
-  assert.match(librarySource, /xl:grid-cols-/);
+  assert.match(librarySource, /xl:grid-cols-2/);
   assert.match(librarySource, /md:grid-cols-2/);
   assert.match(librarySource, /flex-wrap/);
   assert.match(librarySource, /line-clamp-2/);
@@ -102,6 +106,25 @@ test("library layout is compact, responsive, themed, and keeps placeholders", ()
   assert.match(librarySource, /metric-card/);
   assert.match(librarySource, /prompt-placeholder/);
   assert.match(experimentSource, /prompt-placeholder/);
+});
+
+test("library action controls preserve intrinsic width without wrapping", () => {
+  assert.equal(
+    librarySource.split("prompt-library-action").length - 1,
+    6,
+  );
+  const actionRule = globalsSource.match(
+    /\.prompt-library-action\s*\{([\s\S]*?)\}/u,
+  );
+  assert.ok(actionRule);
+  assert.match(actionRule[1], /width:\s*auto/u);
+  assert.match(actionRule[1], /min-width:\s*max-content/u);
+  assert.match(actionRule[1], /height:\s*auto/u);
+  assert.match(actionRule[1], /flex-shrink:\s*0/u);
+  assert.match(actionRule[1], /white-space:\s*nowrap/u);
+  assert.match(librarySource, /workbench-input min-w-0 flex-1/);
+  assert.match(librarySource, /flex shrink-0 flex-wrap gap-2 sm:flex-nowrap/);
+  assert.doesNotMatch(librarySource, /prompt-library-action[^\n]*flex-1/u);
 });
 
 test("all visible library text has matching English and Chinese keys", () => {

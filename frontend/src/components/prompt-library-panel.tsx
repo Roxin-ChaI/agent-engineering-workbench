@@ -244,7 +244,7 @@ export function PromptLibraryPanel({
         </p>
       </div>
 
-      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(17rem,0.7fr)_minmax(0,1.3fr)]">
+      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-2">
         <div className="min-w-0 space-y-4">
           <div>
             <label
@@ -281,7 +281,7 @@ export function PromptLibraryPanel({
               type="button"
               disabled={mutation !== null}
               onClick={() => void handleSave()}
-              className="primary-action rounded-md border px-3 py-2 text-sm font-medium"
+              className="prompt-library-action primary-action rounded-md border px-3 py-2 text-sm font-medium"
             >
               {mutation === "save"
                 ? t("prompt.librarySaving")
@@ -291,7 +291,7 @@ export function PromptLibraryPanel({
               type="button"
               disabled={selectedPromptId === null || mutation !== null}
               onClick={() => void handleUpdate()}
-              className="control-button rounded-md border px-3 py-2 text-sm"
+              className="prompt-library-action control-button rounded-md border px-3 py-2 text-sm"
             >
               {mutation === "update"
                 ? t("prompt.libraryUpdating")
@@ -326,11 +326,11 @@ export function PromptLibraryPanel({
               placeholder={t("prompt.librarySearchPlaceholder")}
               className="prompt-placeholder workbench-input min-w-0 flex-1 rounded-md border px-3 py-2 text-sm outline-none"
             />
-            <div className="flex gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2 sm:flex-nowrap">
               <button
                 type="submit"
                 disabled={listLoading || !searchQuery.trim()}
-                className="primary-action flex-1 rounded-md border px-3 py-2 text-sm font-medium sm:flex-none"
+                className="prompt-library-action primary-action rounded-md border px-3 py-2 text-sm font-medium"
               >
                 {t("prompt.librarySearchAction")}
               </button>
@@ -341,7 +341,7 @@ export function PromptLibraryPanel({
                   setSearchQuery("");
                   void loadAllPrompts();
                 }}
-                className="control-button flex-1 rounded-md border px-3 py-2 text-sm sm:flex-none"
+                className="prompt-library-action control-button rounded-md border px-3 py-2 text-sm"
               >
                 {t("prompt.libraryClearSearch")}
               </button>
@@ -390,7 +390,7 @@ export function PromptLibraryPanel({
                       <button
                         type="button"
                         onClick={() => handleLoad(item)}
-                        className="primary-action rounded-md border px-2.5 py-1.5 text-xs font-medium"
+                        className="prompt-library-action primary-action rounded-md border px-2.5 py-1.5 text-xs font-medium"
                       >
                         {t("prompt.libraryLoad")}
                       </button>
@@ -398,7 +398,7 @@ export function PromptLibraryPanel({
                         type="button"
                         disabled={mutation !== null}
                         onClick={() => void handleDelete(item)}
-                        className="control-button rounded-md border px-2.5 py-1.5 text-xs"
+                        className="prompt-library-action control-button rounded-md border px-2.5 py-1.5 text-xs"
                       >
                         {mutation === `delete:${item.id}`
                           ? t("prompt.libraryDeleting")
