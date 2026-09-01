@@ -4,9 +4,9 @@
 
 一个通过统一界面集成、运行和检查独立 AI 工程项目的模块化 Web Workbench。
 
-## v0.6.0
+## v0.6.1
 
-v0.6.0 提供六个工作区：
+v0.6.1 提供六个工作区：
 
 - Web Research 使用 [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent)（WRA）v0.2.0。
 - Knowledge Research 使用 [`production-knowledge-research-agent`](https://github.com/Roxin-ChaI/production-knowledge-research-agent)（PKRA）v0.4.0。
@@ -211,15 +211,17 @@ started
 
 ## 质量基线
 
-- Backend：517 tests passed
+- Backend：520 tests passed
+- GitHub Review focused tests：67 passed
 - Prompt Library focused Fake E2E：12 tests passed
 - Ruff：PASS
 - mypy：PASS
 - pip check：PASS
 - Frontend ESLint：PASS
 - TypeScript：PASS
-- Frontend tests：33 passed
-- Next.js 16.3.1 v0.6.0 production build：PASS（TypeScript、page data、10/10 static pages 与 `/prompts` generation 均通过；Node v24.14.0、npm 11.9.0）
+- Frontend tests：34 passed
+- Next.js 16.3.1 v0.6.1 production build：PASS（TypeScript、page data、10/10 static pages 与 `/prompts` generation 均通过；Node v24.14.0、npm 11.9.0）
+- Prompt Library 人工视觉验证：PASS（English/中文、Light/Dark、desktop/mobile 布局）
 
 Fake GUI 已验证三种策略、非法 JSON 在 POST 前拦截、双语/主题与 Browser Console clean。真实 REST/GUI 已验证 no-op（`45 → 45`、节省 0、`compression_applied=false`、HTTP 200）、truncation（`114 → 69`、节省 45 个估算 Token、压缩率约 60.5%、`compressed_message_count=1`、HTTP 200）、TokenBudgetError → HTTP 422 与 Console clean。Duration 为每次运行的实测值，不作为固定 benchmark。
 

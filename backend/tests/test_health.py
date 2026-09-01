@@ -12,7 +12,7 @@ def test_health() -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.6.0"}
+    assert response.json() == {"status": "ok", "version": "0.6.1"}
     assert response.headers["content-type"] == "application/json"
 
 

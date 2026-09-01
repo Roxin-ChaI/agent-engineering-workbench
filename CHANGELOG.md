@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.6.1
+
+### Prompt Library Layout
+
+- Fixed desktop action controls being compressed below their intrinsic content width.
+- Fixed Chinese Update and Clear labels wrapping one character per line.
+- Balanced the Save/Update and Search/Clear control groups while preserving responsive wrapping.
+- Verified the layout in English and Chinese, Light and Dark themes, and desktop through mobile widths.
+
+### GitHub Review Diagnostics
+
+- Added safe server-side failure diagnostics with a failure category, root exception type, and optional integer upstream status.
+- Diagnostics never record exception messages, response bodies, URLs, headers, or API keys, and the existing HTTP response contract remains unchanged.
+- The diagnostics were validated while investigating a runtime provider/network routing failure; this release does not claim to fix provider connectivity.
+
+### Verification
+
+- 520 Backend tests, including 67 focused GitHub Review tests, and 34 Frontend tests pass.
+- Ruff, mypy across 66 source files, pip check, Frontend ESLint, and TypeScript pass.
+- Next.js 16.3.1 production build: PASS, including `/prompts`.
+- Prompt Library manual visual verification: PASS.
+
 ## v0.6.0
 
 ### Prompt Library

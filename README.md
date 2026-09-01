@@ -4,9 +4,9 @@
 
 A modular Web workbench for integrating, running, and inspecting independent AI engineering projects through a unified interface.
 
-## v0.6.0
+## v0.6.1
 
-v0.6.0 provides six workspaces:
+v0.6.1 provides six workspaces:
 
 - Web Research uses [`web-research-agent`](https://github.com/Roxin-ChaI/web-research-agent) (WRA) v0.2.0.
 - Knowledge Research uses [`production-knowledge-research-agent`](https://github.com/Roxin-ChaI/production-knowledge-research-agent) (PKRA) v0.4.0.
@@ -211,15 +211,17 @@ Neither endpoint provides native real-time token/tool streaming.
 
 ## Quality Baseline
 
-- Backend: 517 tests passed
+- Backend: 520 tests passed
+- GitHub Review focused tests: 67 passed
 - Prompt Library focused Fake E2E: 12 tests passed
 - Ruff: PASS
 - mypy: PASS
 - pip check: PASS
 - Frontend ESLint: PASS
 - TypeScript: PASS
-- Frontend tests: 33 passed
-- Next.js 16.3.1 v0.6.0 production build: PASS (TypeScript, page data, 10/10 static pages, and `/prompts` generation passed; Node v24.14.0, npm 11.9.0)
+- Frontend tests: 34 passed
+- Next.js 16.3.1 v0.6.1 production build: PASS (TypeScript, page data, 10/10 static pages, and `/prompts` generation passed; Node v24.14.0, npm 11.9.0)
+- Prompt Library manual visual verification: PASS across English/Chinese, Light/Dark, and desktop/mobile layouts
 
 Fake GUI validation covers all three strategies, invalid JSON blocking before POST, bilingual/theme behavior, and a clean browser console. Real REST/GUI validation covers no-op compression (`45 → 45`, zero saved, `compression_applied=false`, HTTP 200), truncation (`114 → 69`, 45 estimated tokens saved, approximately 60.5% ratio, `compressed_message_count=1`, HTTP 200), TokenBudgetError → HTTP 422, and a clean browser console. Duration is measured per run and is not a fixed benchmark.
 
