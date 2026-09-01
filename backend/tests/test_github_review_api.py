@@ -1,7 +1,11 @@
 import inspect
+import logging
 from collections.abc import Iterator
 
 import pytest
+from ai_github_reviewer import (  # type: ignore[import-untyped]
+    ModelReviewError as ReviewerModelReviewError,
+)
 from fastapi.testclient import TestClient
 
 import agent_engineering_workbench.api.github as github_api
@@ -97,6 +101,19 @@ def review_result(
 
 def install_fake_adapter(adapter: FakeGitHubReviewerAdapter) -> None:
     app.dependency_overrides[get_github_review_adapter] = lambda: adapter
+
+
+def execution_error_with_root(root_error: Exception) -> GitHubReviewExecutionError:
+    try:
+        try:
+            raise root_error
+        except Exception as exc:
+            raise ReviewerModelReviewError("hidden reviewer model failure") from exc
+    except ReviewerModelReviewError as exc:
+        try:
+            raise GitHubReviewExecutionError("hidden Workbench failure") from exc
+        except GitHubReviewExecutionError as error:
+            return error
 
 
 def test_github_review_returns_complete_workbench_contract() -> None:
@@ -237,38 +254,118 @@ def test_invalid_pull_request_url_returns_semantic_validation_response() -> None
 
 
 @pytest.mark.parametrize(
-    ("adapter_error", "expected_detail"),
+    ("adapter_error", "expected_detail", "expected_category"),
     (
         (
             GitHubReviewRetrievalError("secret retrieval failure"),
             "Unable to retrieve the public pull request.",
+            "retrieval",
         ),
         (
             GitHubReviewExecutionError("secret model failure"),
             "Unable to generate the pull request review.",
+            "execution",
         ),
         (
             GitHubReviewProtocolError("secret protocol failure"),
             "Reviewer returned an invalid review result.",
+            "protocol",
         ),
     ),
 )
 def test_upstream_errors_return_safe_502(
     adapter_error: Exception,
     expected_detail: str,
+    expected_category: str,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     adapter = FakeGitHubReviewerAdapter(adapter_error)
     install_fake_adapter(adapter)
 
-    response = TestClient(app).post(
-        "/api/github/review",
-        json={"pr_url": PR_URL},
-    )
+    with caplog.at_level(logging.WARNING, logger=github_api.__name__):
+        response = TestClient(app).post(
+            "/api/github/review",
+            json={"pr_url": PR_URL},
+        )
 
     assert response.status_code == 502
     assert response.json() == {"detail": expected_detail}
     assert "secret" not in response.text
+    assert f"github_review_failure category={expected_category}" in caplog.text
+    assert "secret" not in caplog.text
     assert adapter.urls == [PR_URL]
+
+
+def test_execution_failure_logs_only_safe_root_exception_type(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class OriginalError(Exception):
+        pass
+
+    adapter = FakeGitHubReviewerAdapter(
+        execution_error_with_root(OriginalError("private provider message"))
+    )
+    install_fake_adapter(adapter)
+
+    with caplog.at_level(logging.WARNING, logger=github_api.__name__):
+        response = TestClient(app).post(
+            "/api/github/review",
+            json={"pr_url": PR_URL},
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Unable to generate the pull request review."
+    }
+    assert "github_review_failure category=execution" in caplog.text
+    assert "root_exception_type=OriginalError" in caplog.text
+    assert "upstream_status=none" in caplog.text
+    assert "private provider message" not in caplog.text
+
+
+def test_execution_failure_logs_safe_integer_status_without_secrets(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FakeProviderError(Exception):
+        status_code = 400
+
+    secret_values = (
+        "sk-secret-test",
+        "https://api.deepseek.com/sensitive",
+        "Authorization: Bearer secret",
+        "provider raw body",
+    )
+    adapter = FakeGitHubReviewerAdapter(
+        execution_error_with_root(FakeProviderError(" ".join(secret_values)))
+    )
+    install_fake_adapter(adapter)
+
+    with caplog.at_level(logging.WARNING, logger=github_api.__name__):
+        response = TestClient(app).post(
+            "/api/github/review",
+            json={"pr_url": PR_URL},
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Unable to generate the pull request review."
+    }
+    assert "root_exception_type=FakeProviderError" in caplog.text
+    assert "upstream_status=400" in caplog.text
+    for secret in secret_values:
+        assert secret not in caplog.text
+        assert secret not in response.text
+    assert "FakeProviderError" not in response.text
+    assert "400" not in response.text
+
+
+def test_root_cause_traversal_stops_on_a_cycle() -> None:
+    first = RuntimeError("first")
+    second = ValueError("second")
+    first.__cause__ = second
+    second.__cause__ = first
+
+    assert github_api._root_cause(first) is second
 
 
 @pytest.mark.parametrize(
