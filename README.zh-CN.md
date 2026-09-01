@@ -151,7 +151,9 @@ AEW 是一组独立 AI 工程项目之上的应用层：
 
 ## License
 
-仓库级 License 尚未添加。在复用或再分发前，请同时检查各上游集成项目的 License。
+本项目采用 [MIT License](LICENSE)。
+
+各上游集成项目仍保持独立 License；在复用或再分发相关代码时，请同时检查对应项目的 License。
 
 ---
 
